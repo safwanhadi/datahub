@@ -1,0 +1,32 @@
+{% load static %}
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SIMRS DataHub{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/indicators.css' %}">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">D</span><div>DataHub<small>SIMRS Verification</small></div></div>
+    <nav>
+      <a href="{% url 'verification:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Ringkasan</a>
+      <a href="{% url 'verification:indicators' %}" class="{% if 'indicator' in request.resolver_match.url_name %}active{% endif %}">Indikator Rawat Inap</a>
+      <a href="{% url 'verification:records' %}" class="{% if request.resolver_match.url_name == 'records' %}active{% endif %}">Antrian Data</a>
+      {% if perms.verification.add_importbatch %}<a href="{% url 'verification:import' %}">Impor SIMRS</a>{% endif %}
+      {% if request.user.is_staff %}<a href="{% url 'admin:index' %}">Administrasi</a>{% endif %}
+    </nav>
+    <div class="sidebar-user">
+      <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Keluar</button></form>
+    </div>
+  </aside>
+  <main>
+    <header><div><p class="eyebrow">PUSAT DATA RUMAH SAKIT</p><h1>{% block heading %}Dashboard{% endblock %}</h1></div><span class="secure">● Sistem aktif</span></header>
+    {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
