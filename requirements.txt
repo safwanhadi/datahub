@@ -6,7 +6,7 @@ drf-spectacular==0.30.0
 inflection==0.5.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-mysqlclient==2.2.7
+PyMySQL
 python-dotenv==1.2.2
 PyYAML==6.0.3
 referencing==0.37.0
