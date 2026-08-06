@@ -1,1 +1,4 @@
 Django==6.0.7
+python-dotenv>=1.0,<2.0
+djangorestframework>=3.16,<4.0
+drf-spectacular>=0.29,<1.0

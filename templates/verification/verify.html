@@ -5,7 +5,7 @@
 <form method="post" class="stack">{% csrf_token %}{{ form.non_field_errors }}
 <label>{{ form.verified_data_text.label }}{{ form.verified_data_text }}{{ form.verified_data_text.errors }}</label>
 <label>{{ form.verification_notes.label }}{{ form.verification_notes }}{{ form.verification_notes.errors }}</label>
-<div class="actions"><a class="button secondary" href="{% url 'verification:records' %}">Kembali</a><button name="action" value="save" class="secondary">Simpan draf</button><button name="action" value="approve" class="primary">Setujui data</button></div></form></section>
+<div class="actions"><a class="button secondary" href="{% url 'verification:records' %}">Kembali</a><button name="action" value="save" class="secondary">Simpan draf</button>{% if perms.verification.approve_verifiedrecord %}<button name="action" value="approve" class="primary">Setujui data</button>{% endif %}</div></form></section>
 </div>
 {% if verified.audits.exists %}<section class="panel audit"><h2>Jejak audit</h2>{% for audit in verified.audits.all %}<p><strong>{{ audit.action }}</strong> oleh {{ audit.actor|default:"Sistem" }} <small>{{ audit.created_at|date:"d M Y H:i" }}</small></p>{% endfor %}</section>{% endif %}
 {% endblock %}

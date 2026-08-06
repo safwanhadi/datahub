@@ -2,9 +2,72 @@
 {% block title %}Indikator Rawat Inap — DataHub{% endblock %}{% block heading %}Indikator rawat inap{% endblock %}
 {% block content %}
 <div class="notice">Enam indikator tahap pertama: ALOS, BOR, BTO, TOI, GDR, dan NDR. Pegawai bekerja melalui tabel; hasil query asli SIMRS tetap tersimpan sebagai arsip sistem.</div>
-<section class="panel"><div class="panel-title"><div><h2>Data bulanan</h2><p>Ambil data dari SIMRS, periksa nilainya, kemudian setujui.</p></div>
-{% if perms.verification.add_inpatientindicatorsource %}<form method="post" action="{% url 'verification:indicator-sync' %}" class="sync-form">{% csrf_token %}{{ period_form.period }}<button class="primary">Ambil dari SIMRS</button></form>{% endif %}</div>
-<div class="table-wrap"><table class="indicator-table"><thead><tr><th>Periode</th><th>ALOS<br><small>hari</small></th><th>BOR<br><small>%</small></th><th>BTO<br><small>kali</small></th><th>TOI<br><small>hari</small></th><th>GDR<br><small>‰</small></th><th>NDR<br><small>‰</small></th><th>Status</th><th></th></tr></thead><tbody>
-{% for item in records %}<tr><td><strong>{{ item.period|date:"F Y" }}</strong><small>Diambil {{ item.fetched_at|date:"d M Y H:i" }}</small></td><td>{{ item.verification.alos }}</td><td>{{ item.verification.bor }}</td><td>{{ item.verification.bto }}</td><td>{{ item.verification.toi }}</td><td>{{ item.verification.gdr }}</td><td>{{ item.verification.ndr }}</td><td><span class="badge {% if item.verification.status == 'approved' %}verified{% else %}in_review{% endif %}">{{ item.verification.get_status_display }}</span></td><td>{% if perms.verification.change_verifiedinpatientindicator %}<a class="button secondary small" href="{% url 'verification:indicator-verify' item.pk %}">Periksa</a>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="9" class="empty">Belum ada data. Pilih bulan lalu klik “Ambil dari SIMRS”.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="panel">
+    <div class="panel-title">
+        <div>
+            <h2>Data bulanan</h2>
+            <p>Ambil data dari SIMRS, periksa nilainya, kemudian setujui.</p>
+        </div>
+    {% if perms.verification.add_inpatientindicatorsource %}
+    <form method="post" action="{% url 'verification:indicator-sync' %}" class="sync-form period-form">
+        {% csrf_token %}
+        <label>Jenis{{ period_form.period_type }}</label>
+        <label>Tahun{{ period_form.year }}</label>
+        <label>Bulan{{ period_form.month }}</label>
+        <label>Triwulan{{ period_form.quarter }}</label>
+        <label>Semester{{ period_form.semester }}</label>
+        <button class="primary">Ambil dari SIMRS</button>
+    </form>
+    {% endif %}
+</div>
+<div class="table-wrap">
+    <table class="indicator-table">
+        <thead>
+            <tr>
+                <th>Periode</th>
+                <th>ALOS<br><small>hari</small></th>
+                <th>BOR<br><small>%</small></th>
+                <th>BTO<br><small>kali</small></th>
+                <th>TOI<br><small>hari</small></th>
+                <th>GDR<br><small>‰</small></th>
+                <th>NDR<br><small>‰</small></th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in records %}
+            <tr>
+                <td>
+                    <strong>{{ item.period_start|date:"d M Y" }} – {{ item.period_end|date:"d M Y" }}</strong>
+                    <small>{{ item.period_type|title }} · Diambil {{ item.fetched_at|date:"d M Y H:i" }}</small>
+                </td>
+                <td>{{ item.verification.alos }}</td>
+                <td>{{ item.verification.bor }}</td>
+                <td>{{ item.verification.bto }}</td>
+                <td>{{ item.verification.toi }}</td>
+                <td>{{ item.verification.gdr }}</td>
+                <td>{{ item.verification.ndr }}</td>
+                <td>
+                    <span class="badge {% if item.verification.status == 'approved' %}verified{% else %}in_review{% endif %}">
+                        {{ item.verification.get_status_display }}
+                    </span>
+                </td>
+                <td>
+                    {% if perms.verification.change_verifiedinpatientindicator %}
+                        <a class="button secondary small" href="{% url 'verification:indicator-verify' item.pk %}">Periksa</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="empty">Belum ada data. Pilih bulan lalu klik “Ambil dari SIMRS”.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</section>
+
 {% endblock %}

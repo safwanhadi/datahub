@@ -1,0 +1,56 @@
+ALUR PELUNCURAN DATAHUB DARI PORTAL SSO SIMADU
+============================================================
+
+TUJUAN
+Pegawai membuka portal SIMADU, memilih ikon DataHub, menjalani otorisasi OAuth2,
+kemudian masuk ke dashboard DataHub tanpa mengisi username/password lagi.
+
+URL IKON APLIKASI DI SIMADU
+
+Development:
+http://127.0.0.1:8000/accounts/simadu/launch/
+
+Production:
+https://datahub.rsmandalika.com/accounts/simadu/launch/
+
+PENTING
+URL ikon adalah endpoint /accounts/simadu/launch/, bukan URL /o/authorize/
+SIMADU dan bukan URL callback DataHub.
+
+REDIRECT URI OAUTH YANG DIDAFTARKAN PADA CLIENT SIMADU
+
+Development:
+http://127.0.0.1:8000/accounts/callback/
+
+Production:
+https://datahub.rsmandalika.com/accounts/callback/
+
+Redirect URI harus sama persis dengan konfigurasi client OAuth, termasuk
+http/https, domain, port, path, dan garis miring terakhir.
+
+ALUR
+
+1. Pegawai login dan membuka portal SIMADU.
+2. Portal menampilkan ikon aplikasi DataHub.
+3. Ikon membuka URL /accounts/simadu/launch/ pada DataHub.
+4. DataHub membuat state dan PKCE code verifier/challenge.
+5. DataHub mengarahkan browser ke /o/authorize/ SIMADU.
+6. Karena pegawai sudah login di SIMADU, SIMADU dapat langsung menampilkan
+   persetujuan atau langsung menerbitkan authorization code sesuai kebijakan.
+7. SIMADU mengembalikan browser ke /accounts/callback/ DataHub.
+8. DataHub memvalidasi state, menukar code dengan token, lalu membaca api/me.
+9. DataHub hanya menerima pengguna dengan pejabat=true.
+10. Pejabat tanpa role khusus otomatis menjadi Pembaca.
+11. Pegawai diarahkan ke halaman Ringkasan DataHub.
+
+KONFIGURASI MENU/APLIKASI DI SIMADU
+
+Nama aplikasi : DataHub
+Launch URL     : https://datahub.rsmandalika.com/accounts/simadu/launch/
+Redirect URI  : https://datahub.rsmandalika.com/accounts/callback/
+Scope          : read:pegawai
+Status         : aktif
+
+Gunakan client_id yang sama pada konfigurasi SIMADU dan file environment
+DataHub. Jangan membuat link authorize secara manual karena state dan PKCE harus
+dibuat oleh DataHub untuk setiap sesi.

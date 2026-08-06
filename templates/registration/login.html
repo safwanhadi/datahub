@@ -5,7 +5,9 @@
 <body class="login-page"><section class="login-card">
   <div class="brand center"><span class="brand-mark">D</span><div>DataHub<small>SIMRS Verification</small></div></div>
   <h1>Selamat datang kembali</h1><p>Masuk untuk mengelola dan memverifikasi data rumah sakit.</p>
+  {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
   {% if form.errors %}<div class="alert error">Nama pengguna atau kata sandi tidak tepat.</div>{% endif %}
+  <p><a class="primary full" href="{% url 'myaccount:simadu-launch' %}">Masuk melalui Portal SIMADU</a></p>
   <form method="post" class="stack">{% csrf_token %}
     <label>Nama pengguna {{ form.username }}</label>
     <label>Kata sandi {{ form.password }}</label>

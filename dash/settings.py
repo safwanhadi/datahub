@@ -11,10 +11,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+TESTING = "test" in sys.argv
+if not TESTING:
+    load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -45,6 +51,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
+    'api_access',
+    'api_internal',
+    'api_external',
+    'simrs_mock',
+    'myaccount',
     'verification',
 ]
 
@@ -55,6 +68,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'myaccount.middleware.SimaduOfficialAccessMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -83,10 +97,23 @@ WSGI_APPLICATION = 'dash.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get("MYSQL_DATABASE"),
+        'USER': os.environ.get("MYSQL_USER"),
+        'PASSWORD': os.environ.get("MYSQL_PASSWORD"),
+        'HOST': os.environ.get("MYSQL_HOST"),
+        'PORT': os.environ.get("MYSQL_PORT"),
+        'OPTIONS': { 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'", },
     }
 }
+
+if TESTING:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "test.sqlite3",
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -131,8 +158,35 @@ LOGOUT_REDIRECT_URL = 'login'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "SIMRS DataHub API",
+    "DESCRIPTION": "API data rumah sakit yang telah melalui proses verifikasi.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}
+
+# OAuth2 SSO SIMADU: Authorization Code dengan opaque access token.
+SIMADU_SSO_AUTHORIZE_URL = os.environ.get("SIMADU_SSO_AUTHORIZE_URL", "")
+SIMADU_SSO_TOKEN_URL = os.environ.get("SIMADU_SSO_TOKEN_URL", "")
+SIMADU_SSO_USERINFO_URL = os.environ.get("SIMADU_SSO_USERINFO_URL", "")
+SIMADU_SSO_LOGOUT_URL = os.environ.get("SIMADU_SSO_LOGOUT_URL", "")
+SIMADU_SSO_CLIENT_ID = os.environ.get("SIMADU_SSO_CLIENT_ID", "")
+SIMADU_SSO_CLIENT_SECRET = os.environ.get("SIMADU_SSO_CLIENT_SECRET", "")
+SIMADU_SSO_REDIRECT_URI = os.environ.get("SIMADU_SSO_REDIRECT_URI", "")
+SIMADU_SSO_SCOPE = os.environ.get(
+    "SIMADU_SSO_SCOPE", "read:pegawai"
+)
+SIMADU_SSO_TIMEOUT = int(os.environ.get("SIMADU_SSO_TIMEOUT", "10"))
+
 # PHP merupakan satu-satunya jembatan ke SIMRS; Django tidak membuka koneksi DB SIMRS.
 SIMRS_INDICATOR_API_URL = os.environ.get("SIMRS_INDICATOR_API_URL", "")
+SIMRS_HEALTH_API_URL = os.environ.get("SIMRS_HEALTH_API_URL", "")
+SIMRS_MOCK_TOKEN = os.environ.get("SIMRS_MOCK_TOKEN", "mock-simrs-token")
 
 # OAuth opaque SIMADU: DataHub sebagai client saat membaca API PHP/SIMRS.
 SIMADU_TOKEN_URL = os.environ.get("SIMADU_TOKEN_URL", "")
@@ -150,21 +204,13 @@ SIMADU_INTROSPECTION_CLIENT_ID = os.environ.get(
 SIMADU_INTROSPECTION_CLIENT_SECRET = os.environ.get(
     "SIMADU_INTROSPECTION_CLIENT_SECRET", ""
 )
-DATAHUB_API_REQUIRED_SCOPE = os.environ.get(
-    "DATAHUB_API_REQUIRED_SCOPE", "datahub.indicators.read"
-)
-SIMADU_ALLOWED_API_CLIENTS = {
-    value.strip()
-    for value in os.environ.get("SIMADU_ALLOWED_API_CLIENTS", "").split(",")
-    if value.strip()
-}
 SIMADU_OAUTH_TIMEOUT = int(os.environ.get("SIMADU_OAUTH_TIMEOUT", "10"))
 SIMADU_INTROSPECTION_CACHE_SECONDS = min(
     int(os.environ.get("SIMADU_INTROSPECTION_CACHE_SECONDS", "30")), 60
 )
 
 # Cookie/HTTPS hardening otomatis aktif ketika mode production digunakan.
-if not DEBUG:
+if not DEBUG and not TESTING:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

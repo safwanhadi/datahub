@@ -2,14 +2,75 @@ from django.contrib import admin
 
 from .models import (
     DataSource,
+    SimrsApiEndpoint,
     ImportBatch,
     InpatientIndicatorAudit,
     InpatientIndicatorSource,
+    MonthlyHealthIndicatorAudit,
+    MonthlyHealthIndicatorSource,
     StagedRecord,
     VerificationAudit,
     VerifiedInpatientIndicator,
+    VerifiedMonthlyHealthIndicator,
+    VerifiedHealthVisitRow,
+    VerifiedTopDiseaseRow,
+    VerifiedTouristVisitRow,
+    VerifiedDiseaseGroupRow,
     VerifiedRecord,
 )
+
+
+@admin.register(SimrsApiEndpoint)
+class SimrsApiEndpointAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "url", "is_active", "timeout_seconds", "updated_at")
+    list_filter = ("is_active", "code")
+    search_fields = ("name", "code", "url")
+    readonly_fields = ("created_at", "updated_at", "updated_by")
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(MonthlyHealthIndicatorSource)
+class MonthlyHealthIndicatorSourceAdmin(admin.ModelAdmin):
+    list_display = ("period", "hospital_code", "hospital_name", "fetched_at")
+    readonly_fields = ("source_data", "raw_response", "fetched_at")
+
+
+class MonthlyHealthIndicatorAuditInline(admin.TabularInline):
+    model = MonthlyHealthIndicatorAudit
+    extra = 0
+    readonly_fields = ("action", "before_data", "after_data", "actor", "created_at")
+    can_delete = False
+
+
+class VerifiedHealthVisitRowInline(admin.TabularInline):
+    model = VerifiedHealthVisitRow
+    extra = 0
+
+
+class VerifiedTopDiseaseRowInline(admin.TabularInline):
+    model = VerifiedTopDiseaseRow
+    extra = 0
+
+
+class VerifiedTouristVisitRowInline(admin.TabularInline):
+    model = VerifiedTouristVisitRow
+    extra = 0
+
+
+class VerifiedDiseaseGroupRowInline(admin.TabularInline):
+    model = VerifiedDiseaseGroupRow
+    extra = 0
+
+
+@admin.register(VerifiedMonthlyHealthIndicator)
+class VerifiedMonthlyHealthIndicatorAdmin(admin.ModelAdmin):
+    list_display = ("period", "status", "verified_by", "verified_at")
+    list_filter = ("status",)
+    readonly_fields = ("source", "period", "verified_data", "verified_by", "verified_at", "updated_at")
+    inlines = (VerifiedHealthVisitRowInline, VerifiedTopDiseaseRowInline, VerifiedTouristVisitRowInline, VerifiedDiseaseGroupRowInline, MonthlyHealthIndicatorAuditInline)
 
 
 @admin.register(DataSource)

@@ -23,10 +23,6 @@ class InvalidAccessToken(OAuthError):
     pass
 
 
-class InsufficientScope(OAuthError):
-    pass
-
-
 def _required_setting(name):
     value = getattr(settings, name, "")
     if not value:
@@ -90,8 +86,8 @@ def get_simrs_access_token():
     return access_token
 
 
-def introspect_access_token(raw_token, *, required_scope):
-    """Validasi token pihak ketiga melalui introspection SIMADU (fail-closed)."""
+def introspect_raw_access_token(raw_token):
+    """Introspeksi opaque token SIMADU tanpa menerapkan kebijakan endpoint."""
     token_digest = hashlib.sha256(raw_token.encode()).hexdigest()
     cache_key = f"oauth:introspection:{token_digest}"
     payload = cache.get(cache_key)
@@ -116,12 +112,4 @@ def introspect_access_token(raw_token, *, required_scope):
     if payload.get("active") is not True:
         raise InvalidAccessToken("Token tidak aktif atau kedaluwarsa.")
 
-    scopes = set(payload.get("scope", "").split())
-    if required_scope not in scopes:
-        raise InsufficientScope(f"Scope {required_scope} diperlukan.")
-
-    allowed_clients = settings.SIMADU_ALLOWED_API_CLIENTS
-    client_id = payload.get("client_id")
-    if allowed_clients and client_id not in allowed_clients:
-        raise InvalidAccessToken("OAuth client tidak diizinkan mengakses DataHub.")
     return payload

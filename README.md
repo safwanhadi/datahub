@@ -18,7 +18,17 @@ Alur operasional lengkap tersedia di [FLOW_PENGGUNAAN.md](FLOW_PENGGUNAAN.md).
 Buka `http://127.0.0.1:8000/`. Buat `Data Source` melalui halaman admin, lalu berikan
 izin `add import batch` dan `change verified record` kepada grup verifikator.
 
+Untuk ikon aplikasi pada portal SIMADU, gunakan launch URL
+`/accounts/simadu/launch/`. Endpoint ini membuat state dan PKCE sebelum menuju
+authorize SIMADU. Jangan arahkan ikon langsung ke `/o/authorize/` atau callback.
+Panduan lengkap tersedia di `docs/ALUR_SSO_SIMADU.txt`.
+
 ## Data masuk
+
+URL API SIMRS dikelola secara dinamis melalui **Administrasi → Endpoint API
+SIMRS**. Konfigurasi database memiliki prioritas atas environment; environment
+tetap dipakai sebagai fallback untuk kompatibilitas. Credential OAuth dan
+client secret tetap wajib disimpan di environment, bukan database.
 
 UI **Impor SIMRS** menerima array JSON berikut:
 
@@ -39,12 +49,12 @@ access token ke SIMADU menggunakan `client_credentials`, lalu mengirimkannya ke
 DataHub:
 
 ```http
-GET /api/v1/data/kunjungan/?limit=100
+GET /api/external/v1/records/kunjungan/?limit=100
 Authorization: Bearer opaque-access-token-dari-simadu
 ```
 
 DataHub memvalidasi token melalui introspection SIMADU dan mewajibkan scope
-`datahub.indicators.read`.
+`read:dash`.
 
 Konfigurasi produksi memakai environment variable `DJANGO_SECRET_KEY`,
 `DJANGO_DEBUG=false`, dan `DJANGO_ALLOWED_HOSTS`.
@@ -100,15 +110,15 @@ Kontrak JSON minimal:
 }
 ```
 
-Endpoint publik:
+Endpoint eksternal:
 
 ```text
-GET /api/v1/indikator/alos/
-GET /api/v1/indikator/bor/
-GET /api/v1/indikator/bto/
-GET /api/v1/indikator/toi/
-GET /api/v1/indikator/gdr/
-GET /api/v1/indikator/ndr/
+GET /api/external/v1/indicators/alos/
+GET /api/external/v1/indicators/bor/
+GET /api/external/v1/indicators/bto/
+GET /api/external/v1/indicators/toi/
+GET /api/external/v1/indicators/gdr/
+GET /api/external/v1/indicators/ndr/
 ```
 
 Semua endpoint menerima `?tahun=2026&bulan=6` dan membutuhkan Bearer Token.
@@ -123,7 +133,7 @@ DataHub membutuhkan dua registrasi mesin yang terpisah:
    SIMADU. Credential ini tidak dikirim kepada pihak ketiga.
 
 Setiap pihak ketiga juga dibuatkan client tersendiri, misalnya
-`dinkes-datahub-reader`, dengan scope `datahub.indicators.read`.
+`dinkes-datahub-reader`, dengan scope `read:dash`.
 
 Konfigurasi introspection DataHub:
 
@@ -131,9 +141,83 @@ Konfigurasi introspection DataHub:
 $env:SIMADU_INTROSPECTION_URL="https://simadu.rsmandalika.com/o/introspect/"
 $env:SIMADU_INTROSPECTION_CLIENT_ID="datahub-resource-server"
 $env:SIMADU_INTROSPECTION_CLIENT_SECRET="secret-introspection-dari-simadu"
-$env:DATAHUB_API_REQUIRED_SCOPE="datahub.indicators.read"
-$env:SIMADU_ALLOWED_API_CLIENTS="dinkes-datahub-reader"
 $env:SIMADU_INTROSPECTION_CACHE_SECONDS="30"
 ```
 
-Lihat [.env.example](.env.example) untuk seluruh konfigurasi.
+## API internal dan eksternal
+
+DataHub menyediakan dua kontrak OpenAPI yang terpisah:
+
+- API internal: `/api/internal/v1/`, Swagger `/docs/internal/`.
+- API eksternal: `/api/external/v1/`, Swagger `/docs/external/`.
+
+API internal menggunakan session login Django/SSO. API eksternal menggunakan
+opaque Bearer Token SIMADU, lalu memeriksa `client_id`, scope, produk API yang
+diberikan, masa berlaku grant, dan rate limit client.
+
+Enam produk indikator dibuat otomatis oleh migrasi dengan kode
+`indicator-alos`, `indicator-bor`, `indicator-bto`, `indicator-toi`,
+`indicator-gdr`, dan `indicator-ndr`. Untuk membuka akses kepada mitra:
+
+1. Buat OAuth client khusus mitra di SIMADU.
+2. Buat **Client API eksternal** di Django Admin dengan `client_id` yang sama.
+3. Tambahkan hanya **Izin client eksternal** yang disetujui.
+4. Atur batas request per menit dan, bila diperlukan, tanggal kedaluwarsa grant.
+
+Endpoint record menggunakan produk dinamis bernama `records-<record_type>`.
+Contohnya, akses `/api/external/v1/records/kunjungan/` memerlukan produk
+`records-kunjungan`. Produk tersebut harus dibuat terlebih dahulu melalui
+Django Admin beserta scope wajibnya. Respons eksternal hanya membaca data
+berstatus disetujui atau dipublikasikan, dan seluruh akses dicatat sebagai audit.
+
+### Indikator kesehatan rumah sakit
+
+Kontrak indikator kesehatan mengikuti workbook kebutuhan data Dashboard
+Kesehatan. Mock SIMRS membagi data bulanan tanpa identitas pasien ke dalam
+empat kelompok: kunjungan pasien, 10 penyakit terbanyak, kunjungan wisatawan,
+dan jumlah pasien berdasarkan kelompok penyakit.
+
+```json
+{
+  "period": {"type": "month", "label": "2026-07", "start": "2026-07-01", "end": "2026-07-31", "days": 31},
+  "hospital": {"code": "RS-MANDALIKA", "name": "RS Mandalika"},
+  "results": [
+    {"installation": "outpatient", "payment_status": "bpjs", "count": 120},
+    {"installation": "inpatient", "payment_status": "bpjs", "count": 30},
+    {"installation": "emergency", "payment_status": "general", "count": 20}
+  ]
+}
+```
+
+Nilai baku `installation`: `outpatient`, `inpatient`, `emergency`. Nilai baku
+`payment_status`: `general`, `bpjs`, `private_insurance`, `social_assistance`,
+`other`. Kelompok penyakit divalidasi terhadap rentang ICD-10 metadata: kanker
+`C00-C96,D00-D48`, jantung `I00-I52`, stroke `I60-I69`, dan uronefrologi
+`N00-N39`.
+
+API internal tersedia di `/api/internal/v1/health-indicators/`. API eksternal
+tersedia di `/api/external/v1/health-indicators/<code>/` dan memerlukan produk
+grant `health-<code>`, misalnya `health-outpatient-visits` atau
+`health-cancer-patients`.
+
+Respons asli SIMRS tetap disimpan sebagai snapshot JSON. Salinan kerja pegawai
+disimpan sebagai row relasional terpisah untuk kunjungan, penyakit terbanyak,
+wisatawan, dan kelompok penyakit. Form verifikasi serta API membaca tabel row
+tersebut; pegawai tidak perlu mengubah JSON.
+
+### Mock API untuk tim SIMRS
+
+Dalam mode development (`DJANGO_DEBUG=true`) tersedia mock sumber SIMRS dengan
+Swagger di `/docs/mock-simrs/`. Gunakan Bearer Token dari `SIMRS_MOCK_TOKEN`
+(default `mock-simrs-token`) dan parameter `tgl_awal` serta `tgl_akhir`.
+
+```text
+GET /mock/simrs/v1/visits/
+GET /mock/simrs/v1/top-diseases/
+GET /mock/simrs/v1/tourist-visits/
+GET /mock/simrs/v1/disease-groups/
+```
+
+Masing-masing endpoint mengikuti kelompok data pada daftar kebutuhan. File OpenAPI yang dapat dibagikan tersedia di
+`docs/simrs_mock_openapi.yaml`. Pada production, autentikasi mock diganti dengan
+validasi opaque token SIMADU dan scope `simrs.indicators.read`.

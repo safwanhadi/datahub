@@ -1,0 +1,266 @@
+openapi: 3.0.3
+info:
+  title: SIMRS DataHub API
+  version: 1.0.0
+  description: API data rumah sakit yang telah melalui proses verifikasi.
+paths:
+  /api/internal/v1/health-indicators/:
+    get:
+      operationId: health_indicators_retrieve
+      parameters:
+      - in: query
+        name: bulan
+        schema:
+          type: integer
+        description: Bulan laporan 1–12
+      - in: query
+        name: tahun
+        schema:
+          type: integer
+        description: Tahun laporan, contoh 2026
+      tags:
+      - Internal - Indikator Kesehatan
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalMonthlyHealthEnvelope'
+          description: ''
+  /api/internal/v1/indicators/inpatient/:
+    get:
+      operationId: indicators_inpatient_retrieve
+      parameters:
+      - in: query
+        name: bulan
+        schema:
+          type: integer
+        description: Bulan laporan 1–12
+      - in: query
+        name: tahun
+        schema:
+          type: integer
+        description: Tahun laporan, contoh 2026
+      tags:
+      - Internal - Indikator
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalIndicatorEnvelope'
+          description: ''
+  /api/internal/v1/records/{record_type}/:
+    get:
+      operationId: records_retrieve
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Maksimal 500
+      - in: path
+        name: record_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - Internal - Data Terverifikasi
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternalRecordEnvelope'
+          description: ''
+components:
+  schemas:
+    InternalIndicator:
+      type: object
+      properties:
+        periode:
+          type: string
+          format: date
+        jenis_periode:
+          type: string
+        tanggal_awal:
+          type: string
+          format: date
+        tanggal_akhir:
+          type: string
+          format: date
+        status:
+          type: string
+        alos:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        bor:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        bto:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        toi:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        gdr:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        ndr:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        notes:
+          type: string
+        verified_by:
+          type: string
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - alos
+      - bor
+      - bto
+      - gdr
+      - jenis_periode
+      - ndr
+      - notes
+      - periode
+      - status
+      - tanggal_akhir
+      - tanggal_awal
+      - toi
+      - updated_at
+      - verified_at
+      - verified_by
+    InternalIndicatorEnvelope:
+      type: object
+      properties:
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalIndicator'
+      required:
+      - count
+      - results
+    InternalMonthlyHealth:
+      type: object
+      properties:
+        periode:
+          type: string
+          format: date
+        jenis_periode:
+          type: string
+        tanggal_awal:
+          type: string
+          format: date
+        tanggal_akhir:
+          type: string
+          format: date
+        status:
+          type: string
+        hospital_code:
+          type: string
+        hospital_name:
+          type: string
+        data: {}
+        verified_by:
+          type: string
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - data
+      - hospital_code
+      - hospital_name
+      - jenis_periode
+      - periode
+      - status
+      - tanggal_akhir
+      - tanggal_awal
+      - verified_at
+      - verified_by
+    InternalMonthlyHealthEnvelope:
+      type: object
+      properties:
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalMonthlyHealth'
+      required:
+      - count
+      - results
+    InternalRecordEnvelope:
+      type: object
+      properties:
+        record_type:
+          type: string
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalVerifiedRecord'
+      required:
+      - count
+      - record_type
+      - results
+    InternalVerifiedRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        record_type:
+          type: string
+        source_key:
+          type: string
+        status:
+          type: string
+        data: {}
+        verified_by:
+          type: string
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - approved_at
+      - data
+      - id
+      - record_type
+      - source_key
+      - status
+      - updated_at
+      - verified_by
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

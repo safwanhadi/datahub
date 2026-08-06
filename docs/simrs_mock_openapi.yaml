@@ -1,0 +1,341 @@
+openapi: 3.0.3
+info:
+  title: SIMRS DataHub API
+  version: 1.0.0
+  description: API data rumah sakit yang telah melalui proses verifikasi.
+paths:
+  /mock/simrs/v1/disease-groups/:
+    get:
+      operationId: disease_groups_retrieve
+      parameters:
+      - in: query
+        name: tgl_akhir
+        schema:
+          type: string
+        description: Tanggal akhir periode YYYY-MM-DD
+        required: true
+      - in: query
+        name: tgl_awal
+        schema:
+          type: string
+        description: Tanggal awal periode YYYY-MM-DD
+        required: true
+      tags:
+      - Pasien Kanker, Jantung, Stroke, dan Uronefrologi
+      security:
+      - MockSimrsBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiseaseGroupEnvelope'
+          description: ''
+  /mock/simrs/v1/top-diseases/:
+    get:
+      operationId: top_diseases_retrieve
+      parameters:
+      - in: query
+        name: tgl_akhir
+        schema:
+          type: string
+        description: Tanggal akhir periode YYYY-MM-DD
+        required: true
+      - in: query
+        name: tgl_awal
+        schema:
+          type: string
+        description: Tanggal awal periode YYYY-MM-DD
+        required: true
+      tags:
+      - 10 Penyakit Terbanyak
+      security:
+      - MockSimrsBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiseaseEnvelope'
+          description: ''
+  /mock/simrs/v1/tourist-visits/:
+    get:
+      operationId: tourist_visits_retrieve
+      parameters:
+      - in: query
+        name: tgl_akhir
+        schema:
+          type: string
+        description: Tanggal akhir periode YYYY-MM-DD
+        required: true
+      - in: query
+        name: tgl_awal
+        schema:
+          type: string
+        description: Tanggal awal periode YYYY-MM-DD
+        required: true
+      tags:
+      - Kunjungan Wisatawan
+      security:
+      - MockSimrsBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TouristEnvelope'
+          description: ''
+  /mock/simrs/v1/visits/:
+    get:
+      operationId: visits_retrieve
+      parameters:
+      - in: query
+        name: tgl_akhir
+        schema:
+          type: string
+        description: Tanggal akhir periode YYYY-MM-DD
+        required: true
+      - in: query
+        name: tgl_awal
+        schema:
+          type: string
+        description: Tanggal awal periode YYYY-MM-DD
+        required: true
+      tags:
+      - Kunjungan Rawat Jalan, Rawat Inap, dan IGD
+      security:
+      - MockSimrsBearer: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitEnvelope'
+          description: ''
+components:
+  schemas:
+    CategoryEnum:
+      enum:
+      - international
+      - domestic
+      type: string
+      description: |-
+        * `international` - international
+        * `domestic` - domestic
+    CodeEnum:
+      enum:
+      - cancer
+      - heart
+      - stroke
+      - uronephrology
+      type: string
+      description: |-
+        * `cancer` - cancer
+        * `heart` - heart
+        * `stroke` - stroke
+        * `uronephrology` - uronephrology
+    DiseaseEnvelope:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportingPeriod'
+        hospital:
+          $ref: '#/components/schemas/Hospital'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiseaseRow'
+      required:
+      - hospital
+      - period
+      - results
+    DiseaseGroup:
+      type: object
+      properties:
+        code:
+          $ref: '#/components/schemas/CodeEnum'
+        icd10_range:
+          type: string
+        patient_count:
+          type: integer
+          minimum: 0
+      required:
+      - code
+      - icd10_range
+      - patient_count
+    DiseaseGroupEnvelope:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportingPeriod'
+        hospital:
+          $ref: '#/components/schemas/Hospital'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiseaseGroup'
+      required:
+      - hospital
+      - period
+      - results
+    DiseaseRow:
+      type: object
+      properties:
+        installation:
+          $ref: '#/components/schemas/InstallationEnum'
+        icd10_code:
+          type: string
+        name:
+          type: string
+        patient_count:
+          type: integer
+          minimum: 0
+      required:
+      - icd10_code
+      - installation
+      - name
+      - patient_count
+    Hospital:
+      type: object
+      properties:
+        province_code:
+          type: string
+        province_name:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+      required:
+      - code
+      - name
+      - province_code
+      - province_name
+    InstallationEnum:
+      enum:
+      - outpatient
+      - inpatient
+      - emergency
+      type: string
+      description: |-
+        * `outpatient` - outpatient
+        * `inpatient` - inpatient
+        * `emergency` - emergency
+    PaymentStatusEnum:
+      enum:
+      - general
+      - bpjs
+      - private_insurance
+      - social_assistance
+      - other
+      type: string
+      description: |-
+        * `general` - general
+        * `bpjs` - bpjs
+        * `private_insurance` - private_insurance
+        * `social_assistance` - social_assistance
+        * `other` - other
+    ReportingPeriod:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/TypeEnum'
+        label:
+          type: string
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+        days:
+          type: integer
+          minimum: 1
+      required:
+      - days
+      - end
+      - label
+      - start
+      - type
+    TouristEnvelope:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportingPeriod'
+        hospital:
+          $ref: '#/components/schemas/Hospital'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TouristRow'
+      required:
+      - hospital
+      - period
+      - results
+    TouristRow:
+      type: object
+      properties:
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        origin:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+      required:
+      - category
+      - count
+      - origin
+    TypeEnum:
+      enum:
+      - month
+      - quarter
+      - semester
+      - year
+      - custom
+      type: string
+      description: |-
+        * `month` - month
+        * `quarter` - quarter
+        * `semester` - semester
+        * `year` - year
+        * `custom` - custom
+    VisitEnvelope:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/ReportingPeriod'
+        hospital:
+          $ref: '#/components/schemas/Hospital'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitRow'
+      required:
+      - hospital
+      - period
+      - results
+    VisitRow:
+      type: object
+      properties:
+        installation:
+          $ref: '#/components/schemas/InstallationEnum'
+        payment_status:
+          $ref: '#/components/schemas/PaymentStatusEnum'
+        count:
+          type: integer
+          minimum: 0
+      required:
+      - count
+      - installation
+      - payment_status
+  securitySchemes:
+    MockSimrsBearer:
+      type: http
+      scheme: bearer
+      description: 'Development token: mock-simrs-token. Production menggunakan token
+        SIMADU dengan scope simrs.indicators.read.'

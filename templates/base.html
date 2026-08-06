@@ -14,6 +14,7 @@
     <nav>
       <a href="{% url 'verification:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Ringkasan</a>
       <a href="{% url 'verification:indicators' %}" class="{% if 'indicator' in request.resolver_match.url_name %}active{% endif %}">Indikator Rawat Inap</a>
+      <a href="{% url 'verification:health-indicators' %}">Indikator Kesehatan</a>
       <a href="{% url 'verification:records' %}" class="{% if request.resolver_match.url_name == 'records' %}active{% endif %}">Antrian Data</a>
       {% if perms.verification.add_importbatch %}<a href="{% url 'verification:import' %}">Impor SIMRS</a>{% endif %}
       {% if request.user.is_staff %}<a href="{% url 'admin:index' %}">Administrasi</a>{% endif %}

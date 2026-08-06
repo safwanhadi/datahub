@@ -1,0 +1,501 @@
+KONTRAK JSON DATA SIMRS
+RS MANDALIKA - DATAHUB DASHBOARD KESEHATAN
+============================================================
+
+Dokumen ini menjelaskan data JSON agregat yang harus disediakan oleh tim SIMRS.
+Data tidak boleh mengandung identitas pasien, seperti nama, NIK, nomor rekam
+medis, alamat, nomor telepon, atau identitas pribadi lainnya.
+
+
+A. KETENTUAN UMUM
+============================================================
+
+1. Method HTTP
+   GET
+
+2. Parameter wajib untuk seluruh endpoint
+   tgl_awal  : tanggal awal periode, format YYYY-MM-DD
+   tgl_akhir : tanggal akhir periode, format YYYY-MM-DD
+
+   Contoh:
+   ?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+   Rentang periode yang didukung:
+   - Bulanan   : 2026-07-01 sampai 2026-07-31
+   - Triwulan I: 2026-01-01 sampai 2026-03-31
+   - Semester I: 2026-01-01 sampai 2026-06-30
+   - Tahunan   : 2026-01-01 sampai 2026-12-31
+
+   Tim SIMRS tidak memerlukan endpoint berbeda untuk setiap jenis periode.
+   Endpoint yang sama harus menghitung data sesuai tgl_awal dan tgl_akhir.
+
+   Untuk endpoint indikator kesehatan, objek period pada respons berbentuk:
+
+   {
+     "period": {
+       "type": "quarter",
+       "label": "2026-Q1",
+       "start": "2026-01-01",
+       "end": "2026-03-31",
+       "days": 90
+     }
+   }
+
+   Nilai period.type:
+   month    = bulanan
+   quarter  = triwulan
+   semester = semester
+   year     = tahunan
+   custom   = rentang tanggal lainnya
+
+3. Header permintaan
+   Accept: application/json
+   Authorization: Bearer <access_token>
+
+4. Header respons
+   Content-Type: application/json
+
+5. Respons berhasil
+   HTTP 200
+
+6. Aturan nilai
+   - Bilangan dikirim sebagai angka JSON, bukan string.
+   - Nilai jumlah tidak boleh negatif.
+   - Jika jumlah tidak ada, gunakan angka 0, bukan null.
+   - Jika daftar tidak memiliki data, gunakan array kosong [].
+   - Nama key bersifat tetap dan case-sensitive.
+   - Data hanya untuk periode yang diminta.
+   - Satu kombinasi kategori tidak boleh dikirim berulang.
+
+7. Identitas rumah sakit pada respons indikator kesehatan
+   province_code : kode provinsi dalam bentuk string
+   province_name : nama provinsi
+   code          : kode unik rumah sakit
+   name          : nama rumah sakit
+
+
+B. INDIKATOR RAWAT INAP
+============================================================
+
+Enam indikator rawat inap dikirim dalam satu respons: ALOS, BOR, BTO, TOI,
+GDR, dan NDR.
+
+Contoh endpoint:
+GET /kominfo/api/get_rawat_api.php?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+Contoh respons:
+
+{
+  "periode": {
+    "awal": "2026-07-01",
+    "akhir": "2026-07-31",
+    "hari": 31
+  },
+  "data_dasar": {
+    "jumlah_bed": 99,
+    "hari_perawatan": 1502,
+    "pasien_keluar": 453,
+    "pasien_mati": 6,
+    "pasien_mati_48": 4
+  },
+  "indikator": {
+    "alos": 3.32,
+    "bor": 48.94,
+    "bto": 4.58,
+    "toi": 3.46,
+    "gdr": 13.25,
+    "ndr": 8.83
+  }
+}
+
+Definisi field:
+
+periode.awal
+  Tipe   : string tanggal YYYY-MM-DD
+  Wajib  : ya
+  Isi    : tanggal awal periode data
+
+periode.akhir
+  Tipe   : string tanggal YYYY-MM-DD
+  Wajib  : ya
+  Isi    : tanggal akhir periode data
+
+periode.hari
+  Tipe   : integer
+  Wajib  : ya
+  Isi    : jumlah hari dalam periode
+
+data_dasar.jumlah_bed
+  Tipe   : integer
+  Wajib  : ya
+  Isi    : jumlah tempat tidur tersedia
+
+data_dasar.hari_perawatan
+  Tipe   : integer
+  Wajib  : ya
+  Isi    : total hari perawatan pada periode
+
+data_dasar.pasien_keluar
+  Tipe   : integer
+  Wajib  : ya
+  Isi    : pasien keluar hidup dan meninggal
+
+data_dasar.pasien_mati
+  Tipe   : integer
+  Wajib  : ya
+  Isi    : seluruh pasien meninggal
+
+data_dasar.pasien_mati_48
+  Tipe   : integer
+  Wajib  : ya
+  Isi    : pasien meninggal setelah dirawat 48 jam atau lebih
+
+indikator.alos
+  Tipe   : angka desimal
+  Wajib  : ya
+  Satuan : hari
+
+indikator.bor
+  Tipe   : angka desimal
+  Wajib  : ya
+  Satuan : persen
+
+indikator.bto
+  Tipe   : angka desimal
+  Wajib  : ya
+  Satuan : kali
+
+indikator.toi
+  Tipe   : angka desimal
+  Wajib  : ya
+  Satuan : hari
+
+indikator.gdr
+  Tipe   : angka desimal
+  Wajib  : ya
+  Satuan : per 1.000 pasien keluar
+
+indikator.ndr
+  Tipe   : angka desimal
+  Wajib  : ya
+  Satuan : per 1.000 pasien keluar
+
+Catatan:
+DataHub menghitung ulang enam indikator dari data_dasar. Nilai dalam objek
+indikator disimpan sebagai pembanding hasil perhitungan SIMRS.
+
+
+C. KUNJUNGAN RAWAT JALAN, RAWAT INAP, DAN IGD
+============================================================
+
+Ketiga jenis kunjungan digabung dalam satu respons dan dipecah berdasarkan
+status pembayaran.
+
+Endpoint yang disarankan:
+GET /api/visits/?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+Contoh respons lengkap:
+
+{
+  "period": {"type": "month", "label": "2026-07", "start": "2026-07-01", "end": "2026-07-31", "days": 31},
+  "hospital": {
+    "province_code": "52",
+    "province_name": "Nusa Tenggara Barat",
+    "code": "RS-MANDALIKA",
+    "name": "RS Mandalika"
+  },
+  "results": [
+    {"installation": "outpatient", "payment_status": "general", "count": 120},
+    {"installation": "outpatient", "payment_status": "bpjs", "count": 820},
+    {"installation": "outpatient", "payment_status": "private_insurance", "count": 45},
+    {"installation": "outpatient", "payment_status": "social_assistance", "count": 12},
+    {"installation": "outpatient", "payment_status": "other", "count": 20},
+    {"installation": "inpatient", "payment_status": "general", "count": 30},
+    {"installation": "inpatient", "payment_status": "bpjs", "count": 190},
+    {"installation": "inpatient", "payment_status": "private_insurance", "count": 8},
+    {"installation": "inpatient", "payment_status": "social_assistance", "count": 4},
+    {"installation": "inpatient", "payment_status": "other", "count": 6},
+    {"installation": "emergency", "payment_status": "general", "count": 65},
+    {"installation": "emergency", "payment_status": "bpjs", "count": 210},
+    {"installation": "emergency", "payment_status": "private_insurance", "count": 12},
+    {"installation": "emergency", "payment_status": "social_assistance", "count": 7},
+    {"installation": "emergency", "payment_status": "other", "count": 11}
+  ]
+}
+
+Definisi field results:
+
+installation
+  Tipe  : enum string
+  Wajib : ya
+  Nilai :
+    outpatient = Rawat Jalan
+    inpatient  = Rawat Inap
+    emergency  = IGD
+
+payment_status
+  Tipe  : enum string
+  Wajib : ya
+  Nilai :
+    general             = pasien umum
+    bpjs                = BPJS
+    private_insurance   = asuransi swasta
+    social_assistance   = bantuan sosial
+    other               = pembayaran lainnya
+
+count
+  Tipe  : integer, minimal 0
+  Wajib : ya
+  Isi   : jumlah kunjungan
+
+Setiap kombinasi installation dan payment_status sebaiknya selalu tersedia.
+Jika tidak ada kunjungan, kirim count dengan nilai 0.
+
+
+D. SEPULUH PENYAKIT TERBANYAK
+============================================================
+
+Data penyakit dikirim dalam endpoint tersendiri. Maksimal 10 penyakit untuk
+setiap instalasi: Rawat Jalan, Rawat Inap, dan IGD.
+
+Endpoint yang disarankan:
+GET /api/top-diseases/?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+Contoh respons:
+
+{
+  "period": {"type": "month", "label": "2026-07", "start": "2026-07-01", "end": "2026-07-31", "days": 31},
+  "hospital": {
+    "province_code": "52",
+    "province_name": "Nusa Tenggara Barat",
+    "code": "RS-MANDALIKA",
+    "name": "RS Mandalika"
+  },
+  "results": [
+    {
+      "installation": "outpatient",
+      "icd10_code": "J06.9",
+      "name": "Infeksi saluran pernapasan akut",
+      "patient_count": 132
+    },
+    {
+      "installation": "outpatient",
+      "icd10_code": "I10",
+      "name": "Hipertensi esensial",
+      "patient_count": 118
+    },
+    {
+      "installation": "inpatient",
+      "icd10_code": "I10",
+      "name": "Hipertensi esensial",
+      "patient_count": 83
+    },
+    {
+      "installation": "emergency",
+      "icd10_code": "J06.9",
+      "name": "Infeksi saluran pernapasan akut",
+      "patient_count": 77
+    }
+  ]
+}
+
+Definisi field results:
+
+installation
+  Tipe  : enum string
+  Wajib : ya
+  Nilai : outpatient, inpatient, atau emergency
+
+icd10_code
+  Tipe  : string
+  Wajib : ya
+  Isi   : kode diagnosis ICD-10
+
+name
+  Tipe  : string
+  Wajib : ya
+  Isi   : nama diagnosis
+
+patient_count
+  Tipe  : integer, minimal 0
+  Wajib : ya
+  Isi   : jumlah pasien unik dalam periode
+
+Ketentuan:
+  - Maksimal 10 baris untuk setiap installation.
+  - Urutkan dari patient_count terbesar ke terkecil untuk setiap installation.
+  - Pasien dihitung unik pada periode yang diminta.
+  - Array dapat kosong jika seluruh instalasi tidak memiliki data.
+
+
+E. KUNJUNGAN WISATAWAN
+============================================================
+
+Endpoint yang disarankan:
+GET /api/tourist-visits/?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+Contoh respons:
+
+{
+  "period": {"type": "month", "label": "2026-07", "start": "2026-07-01", "end": "2026-07-31", "days": 31},
+  "hospital": {
+    "province_code": "52",
+    "province_name": "Nusa Tenggara Barat",
+    "code": "RS-MANDALIKA",
+    "name": "RS Mandalika"
+  },
+  "results": [
+    {"category": "international", "origin": "Australia", "count": 18},
+    {"category": "international", "origin": "Malaysia", "count": 7},
+    {"category": "domestic", "origin": "Bali", "count": 31},
+    {"category": "domestic", "origin": "Jawa Timur", "count": 24}
+  ]
+}
+
+Definisi field results:
+
+category
+  Tipe  : enum string
+  Wajib : ya
+  Nilai :
+    international = wisatawan mancanegara
+    domestic      = wisatawan domestik
+
+origin
+  Tipe  : string
+  Wajib : ya
+  Isi   :
+    - Nama negara jika category adalah international.
+    - Nama provinsi jika category adalah domestic.
+
+count
+  Tipe  : integer, minimal 0
+  Wajib : ya
+  Isi   : jumlah kunjungan
+
+Jika tidak ada kunjungan wisatawan, kirim results sebagai array kosong [].
+
+
+F. JUMLAH PASIEN BERDASARKAN KELOMPOK PENYAKIT
+============================================================
+
+Jumlah pasien kanker, jantung, stroke, dan uronefrologi digabung dalam satu
+respons.
+
+Endpoint yang disarankan:
+GET /api/disease-groups/?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+Contoh respons lengkap:
+
+{
+  "period": {"type": "month", "label": "2026-07", "start": "2026-07-01", "end": "2026-07-31", "days": 31},
+  "hospital": {
+    "province_code": "52",
+    "province_name": "Nusa Tenggara Barat",
+    "code": "RS-MANDALIKA",
+    "name": "RS Mandalika"
+  },
+  "results": [
+    {
+      "code": "cancer",
+      "icd10_range": "C00-C96,D00-D48",
+      "patient_count": 42
+    },
+    {
+      "code": "heart",
+      "icd10_range": "I00-I52",
+      "patient_count": 76
+    },
+    {
+      "code": "stroke",
+      "icd10_range": "I60-I69",
+      "patient_count": 31
+    },
+    {
+      "code": "uronephrology",
+      "icd10_range": "N00-N39",
+      "patient_count": 58
+    }
+  ]
+}
+
+Definisi field results:
+
+code
+  Tipe  : enum string
+  Wajib : ya
+  Nilai dan rentang ICD-10:
+    cancer          = Kanker, C00-C96 dan D00-D48
+    heart           = Jantung, I00-I52
+    stroke          = Stroke, I60-I69
+    uronephrology   = Uronefrologi, N00-N39
+
+icd10_range
+  Tipe  : string
+  Wajib : ya
+  Nilai : harus sesuai rentang yang ditetapkan untuk setiap code
+
+patient_count
+  Tipe  : integer, minimal 0
+  Wajib : ya
+  Isi   : jumlah pasien unik dalam periode berdasarkan rentang ICD-10
+
+Keempat code harus selalu dikirim. Jika suatu kelompok tidak memiliki pasien,
+kirim patient_count dengan nilai 0.
+
+
+G. CONTOH RESPONS KESALAHAN
+============================================================
+
+Parameter tanggal tidak lengkap:
+HTTP 400
+
+{
+  "status": false,
+  "message": "tgl_awal dan tgl_akhir wajib diisi"
+}
+
+Token tidak sah atau tidak tersedia:
+HTTP 401
+
+{
+  "status": false,
+  "message": "Unauthorized"
+}
+
+Kesalahan internal saat mengambil data:
+HTTP 500
+
+{
+  "status": false,
+  "message": "Terjadi kesalahan saat mengambil data"
+}
+
+Jangan sertakan query SQL, credential, stack trace, atau detail teknis sensitif
+dalam respons kesalahan.
+
+
+H. RINGKASAN ENDPOINT
+============================================================
+
+1. Indikator rawat inap
+   /kominfo/api/get_rawat_api.php
+
+2. Kunjungan Rawat Jalan, Rawat Inap, dan IGD
+   /api/visits/
+
+3. Sepuluh Penyakit Terbanyak
+   /api/top-diseases/
+
+4. Kunjungan Wisatawan
+   /api/tourist-visits/
+
+5. Jumlah Pasien Kanker, Jantung, Stroke, dan Uronefrologi
+   /api/disease-groups/
+
+Seluruh endpoint menggunakan parameter tgl_awal dan tgl_akhir serta Bearer
+Token server-to-server.
+
+============================================================
+AKHIR DOKUMEN
+============================================================

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Akun Saya — DataHub{% endblock %}
+{% block heading %}Akun Saya{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>{{ request.user.get_full_name|default:request.user.username }}</h2>
+  <p>{{ request.user.email|default:"Email belum tersedia" }}</p>
+  {% if request.user.account_profile.simadu_subject %}<p><strong>Status SIMADU:</strong> {% if request.user.account_profile.is_simadu_official %}Pejabat{% else %}Bukan pejabat{% endif %}</p>{% endif %}
+  <p><strong>Role DataHub:</strong> {% for group in request.user.groups.all %}{{ group.name }}{% if not forloop.last %}, {% endif %}{% empty %}Belum ditetapkan{% endfor %}</p>
+</section>
+{% endblock %}

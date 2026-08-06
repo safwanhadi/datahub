@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Indikator Kesehatan — DataHub{% endblock %}
+{% block heading %}Indikator kesehatan{% endblock %}
+{% block content %}
+<div class="notice">Kunjungan, top penyakit, wisatawan, dan kelompok penyakit prioritas. Kepuasan pasien dikelola langsung oleh Diskominfotik. Data API hanya berasal dari salinan yang telah disetujui.</div>
+<section class="panel"><div class="panel-title"><div><h2>Data berdasarkan periode</h2><p>Bulanan, triwulan, semester, atau tahunan.</p></div>
+{% if perms.verification.add_monthlyhealthindicatorsource %}<form method="post" action="{% url 'verification:health-indicator-sync' %}" class="sync-form period-form">{% csrf_token %}<label>Jenis{{ period_form.period_type }}</label><label>Tahun{{ period_form.year }}</label><label>Bulan{{ period_form.month }}</label><label>Triwulan{{ period_form.quarter }}</label><label>Semester{{ period_form.semester }}</label><button class="primary">Ambil dari SIMRS</button></form>{% endif %}</div>
+<div class="table-wrap"><table><thead><tr><th>Periode</th><th>Rumah sakit</th><th>Status</th><th>Diperbarui</th><th></th></tr></thead><tbody>
+{% for item in records %}<tr><td><strong>{{ item.period_start|date:"d M Y" }} – {{ item.period_end|date:"d M Y" }}</strong><small>{{ item.period_type|title }}</small></td><td>{{ item.hospital_name }}<small>{{ item.hospital_code }}</small></td><td><span class="badge {% if item.verification.status == 'approved' %}verified{% else %}in_review{% endif %}">{{ item.verification.get_status_display }}</span></td><td>{{ item.fetched_at|date:"d M Y H:i" }}</td><td>{% if perms.verification.change_verifiedmonthlyhealthindicator %}<a class="button secondary small" href="{% url 'verification:health-indicator-verify' item.pk %}">Periksa</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty">Belum ada data indikator kesehatan.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

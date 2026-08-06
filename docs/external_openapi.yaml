@@ -1,0 +1,250 @@
+openapi: 3.0.3
+info:
+  title: SIMRS DataHub API
+  version: 1.0.0
+  description: API data rumah sakit yang telah melalui proses verifikasi.
+paths:
+  /api/external/v1/health-indicators/{code}/:
+    get:
+      operationId: health_indicators_retrieve
+      parameters:
+      - in: query
+        name: bulan
+        schema:
+          type: integer
+      - in: path
+        name: code
+        schema:
+          type: string
+          enum:
+          - cancer-patients
+          - emergency-visits
+          - heart-patients
+          - inpatient-visits
+          - outpatient-visits
+          - stroke-patients
+          - top-diseases
+          - tourist-visits
+          - uronephrology-patients
+        required: true
+      - in: query
+        name: tahun
+        schema:
+          type: integer
+      tags:
+      - Eksternal - Indikator Kesehatan
+      security:
+      - SimaduBearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalHealthIndicatorEnvelope'
+          description: ''
+  /api/external/v1/indicators/{indicator}/:
+    get:
+      operationId: indicators_retrieve
+      parameters:
+      - in: query
+        name: bulan
+        schema:
+          type: integer
+        description: Bulan laporan 1–12
+      - in: path
+        name: indicator
+        schema:
+          type: string
+          enum:
+          - alos
+          - bor
+          - bto
+          - gdr
+          - ndr
+          - toi
+        required: true
+      - in: query
+        name: tahun
+        schema:
+          type: integer
+        description: Tahun laporan, contoh 2026
+      tags:
+      - Eksternal - Indikator
+      security:
+      - SimaduBearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalIndicatorEnvelope'
+          description: ''
+  /api/external/v1/records/{record_type}/:
+    get:
+      operationId: records_retrieve
+      parameters:
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Maksimal 500
+      - in: path
+        name: record_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - Eksternal - Data Terverifikasi
+      security:
+      - SimaduBearerAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalRecordEnvelope'
+          description: ''
+components:
+  schemas:
+    ExternalHealthIndicatorEnvelope:
+      type: object
+      properties:
+        kode:
+          type: string
+        nama:
+          type: string
+        satuan:
+          type: string
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalHealthIndicatorResult'
+      required:
+      - count
+      - kode
+      - nama
+      - results
+      - satuan
+    ExternalHealthIndicatorResult:
+      type: object
+      properties:
+        periode:
+          type: string
+        jenis_periode:
+          type: string
+        tanggal_awal:
+          type: string
+          format: date
+        tanggal_akhir:
+          type: string
+          format: date
+        data:
+          nullable: true
+        diverifikasi_pada:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - data
+      - diverifikasi_pada
+      - jenis_periode
+      - periode
+      - tanggal_akhir
+      - tanggal_awal
+    ExternalIndicatorEnvelope:
+      type: object
+      properties:
+        indikator:
+          type: string
+        nama:
+          type: string
+        satuan:
+          type: string
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalIndicatorResult'
+      required:
+      - count
+      - indikator
+      - nama
+      - results
+      - satuan
+    ExternalIndicatorResult:
+      type: object
+      properties:
+        periode:
+          type: string
+        jenis_periode:
+          type: string
+        tanggal_awal:
+          type: string
+          format: date
+        tanggal_akhir:
+          type: string
+          format: date
+        nilai:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        diverifikasi_pada:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - diverifikasi_pada
+      - jenis_periode
+      - nilai
+      - periode
+      - tanggal_akhir
+      - tanggal_awal
+    ExternalRecordEnvelope:
+      type: object
+      properties:
+        record_type:
+          type: string
+        count:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExternalVerifiedRecord'
+      required:
+      - count
+      - record_type
+      - results
+    ExternalVerifiedRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_key:
+          type: string
+        data: {}
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - data
+      - id
+      - source_key
+      - updated_at
+      - verified_at
+  securitySchemes:
+    SimaduBearerAuth:
+      type: oauth2
+      description: Opaque access token yang diterbitkan SIMADU.
+      flows:
+        clientCredentials:
+          tokenUrl: https://simadu.rsmandalika.com/o/token/
+          scopes:
+            read:dash: Membaca API terverifikasi DataHub

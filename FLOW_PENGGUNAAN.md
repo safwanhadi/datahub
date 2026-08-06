@@ -160,7 +160,7 @@ Setiap perubahan, pengguna, dan waktu perubahan dicatat dalam audit trail.
 
 1. Administrator SIMADU membuat OAuth client khusus untuk aplikasi pihak ketiga.
 2. Pihak ketiga meminta opaque access token ke token endpoint SIMADU dengan grant
-   `client_credentials` dan scope `datahub.indicators.read`.
+   `client_credentials` dan scope `read:dash`.
 3. Pihak ketiga memanggil salah satu endpoint DataHub dengan Bearer Token.
 4. DataHub mengintrospeksi token kepada SIMADU.
 5. DataHub memeriksa `active`, `exp`, `client_id`, dan scope.
@@ -170,7 +170,7 @@ Setiap perubahan, pengguna, dan waktu perubahan dicatat dalam audit trail.
 Contoh:
 
 ```http
-GET /api/v1/indikator/bor/?tahun=2026&bulan=6
+GET /api/external/v1/indicators/bor/?tahun=2026&bulan=6
 Authorization: Bearer opaque-access-token-dari-simadu
 ```
 

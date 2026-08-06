@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Verifikasi Indikator {{ source.period|date:"F Y" }}{% endblock %}{% block heading %}Verifikasi indikator {{ source.period|date:"F Y" }}{% endblock %}
+{% block title %}Verifikasi Indikator{% endblock %}{% block heading %}Verifikasi {{ source.period_start|date:"d M Y" }} – {{ source.period_end|date:"d M Y" }}{% endblock %}
 {% block content %}
 <div class="compare-banner"><span>1. Data SIMRS diterima</span><b>→</b><span class="active">2. Pemeriksaan pegawai</span><b>→</b><span>3. Siap dipublikasikan</span></div>
 <section class="panel source-summary"><div class="panel-title"><div><h2>Data dasar dari SIMRS</h2><p>Nilai inilah yang digunakan Django untuk menghitung ulang indikator.</p></div></div>
@@ -12,6 +12,6 @@
 <article><label>TOI <small>Rata-rata hari tempat tidur kosong</small>{{ form.toi }}</label><p>PHP: <strong>{{ source.toi }}</strong> · Hitung Django: <strong>{{ source.calculated_toi }}</strong></p>{{ form.toi.errors }}</article>
 <article><label>GDR <small>Kematian umum per 1.000 pasien keluar</small>{{ form.gdr }}</label><p>PHP: <strong>{{ source.gdr }}‰</strong> · Hitung Django: <strong>{{ source.calculated_gdr }}‰</strong></p>{{ form.gdr.errors }}</article>
 <article><label>NDR <small>Kematian >48 jam per 1.000 pasien keluar</small>{{ form.ndr }}</label><p>PHP: <strong>{{ source.ndr }}‰</strong> · Hitung Django: <strong>{{ source.calculated_ndr }}‰</strong></p>{{ form.ndr.errors }}</article>
-</div><section class="panel notes"><label>{{ form.notes.label }}{{ form.notes }}<small>Jelaskan alasan apabila ada nilai yang diubah.</small></label><div class="actions"><a class="button secondary" href="{% url 'verification:indicators' %}">Kembali</a><button name="action" value="save" class="secondary">Simpan draf</button><button name="action" value="approve" class="primary">Setujui dan publikasikan</button></div></section></form>
+</div><section class="panel notes"><label>{{ form.notes.label }}{{ form.notes }}<small>Jelaskan alasan apabila ada nilai yang diubah.</small></label><div class="actions"><a class="button secondary" href="{% url 'verification:indicators' %}">Kembali</a><button name="action" value="save" class="secondary">Simpan draf</button>{% if perms.verification.approve_verifiedinpatientindicator %}<button name="action" value="approve" class="primary">Setujui dan publikasikan</button>{% endif %}</div></section></form>
 {% if record.audits.exists %}<section class="panel audit"><h2>Riwayat pemeriksaan</h2>{% for audit in record.audits.all %}<p><strong>{{ audit.action }}</strong> oleh {{ audit.actor|default:"Sistem" }} <small>{{ audit.created_at|date:"d M Y H:i" }}</small></p>{% endfor %}</section>{% endif %}
 {% endblock %}

@@ -4,6 +4,7 @@ from datetime import date
 from unittest.mock import patch
 
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
@@ -16,12 +17,17 @@ from .models import (
     VerificationAudit,
     VerifiedInpatientIndicator,
     VerifiedRecord,
+    VerifiedHealthVisitRow,
+    VerifiedTopDiseaseRow,
+    VerifiedTouristVisitRow,
+    VerifiedDiseaseGroupRow,
+    SimrsApiEndpoint,
 )
-from .services import store_inpatient_indicator
+from .services import resolve_simrs_endpoint, store_inpatient_indicator, store_monthly_health_indicators
+from .forms import IndicatorPeriodForm, MonthlyHealthVerificationForm
 from .oauth import (
-    InsufficientScope,
     get_simrs_access_token,
-    introspect_access_token,
+    introspect_raw_access_token,
 )
 
 
@@ -32,19 +38,12 @@ class VerificationFlowTests(TestCase):
         self.user.user_permissions.add(
             Permission.objects.get(codename="add_importbatch"),
             Permission.objects.get(codename="change_verifiedrecord"),
+            Permission.objects.get(codename="approve_verifiedrecord"),
         )
         self.source = DataSource.objects.create(name="SIMRS Khanza", code="simrs-khanza")
         self.client.force_login(self.user)
 
-    @patch(
-        "verification.views.introspect_access_token",
-        return_value={
-            "active": True,
-            "client_id": "mitra-test",
-            "scope": "datahub.indicators.read",
-        },
-    )
-    def test_import_verify_and_access_public_api(self, introspect_mock):
+    def test_import_and_verify_record(self):
         response = self.client.post(
             reverse("verification:import"),
             {
@@ -75,32 +74,7 @@ class VerificationFlowTests(TestCase):
         self.assertEqual(verified.status, VerifiedRecord.Status.APPROVED)
         self.assertGreaterEqual(VerificationAudit.objects.count(), 2)
 
-        self.client.logout()
-        response = self.client.get(
-            reverse("verification:public-api", args=["kunjungan"]),
-            HTTP_AUTHORIZATION="Bearer opaque-token-mitra",
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["results"][0]["data"]["nama"], "Pasien Valid")
-        introspect_mock.assert_called_once_with(
-            "opaque-token-mitra", required_scope="datahub.indicators.read"
-        )
-
-    def test_api_rejects_missing_token(self):
-        response = self.client.get(
-            reverse("verification:public-api", args=["kunjungan"])
-        )
-        self.assertEqual(response.status_code, 401)
-
-    @patch(
-        "verification.views.introspect_access_token",
-        return_value={
-            "active": True,
-            "client_id": "mitra-test",
-            "scope": "datahub.indicators.read",
-        },
-    )
-    def test_six_indicator_apis_only_publish_verified_copy(self, introspect_mock):
+    def test_verified_indicator_keeps_source_snapshot_unchanged(self):
         source = store_inpatient_indicator(
             period=date(2026, 6, 1),
             user=self.user,
@@ -133,32 +107,6 @@ class VerificationFlowTests(TestCase):
         verified.save()
         self.assertEqual(InpatientIndicatorSource.objects.get().bor, 999)
 
-        self.client.logout()
-        for indicator in ("alos", "bor", "bto", "toi", "gdr", "ndr"):
-            response = self.client.get(
-                reverse("verification:indicator-api", args=[indicator]),
-                HTTP_AUTHORIZATION="Bearer opaque-token-mitra",
-            )
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.json()["count"], 1)
-        response = self.client.get(
-            reverse("verification:indicator-api", args=["bor"]),
-            HTTP_AUTHORIZATION="Bearer opaque-token-mitra",
-        )
-        self.assertEqual(response.json()["results"][0]["nilai"], 71.0)
-
-    @patch(
-        "verification.views.introspect_access_token",
-        side_effect=InsufficientScope("Scope datahub.indicators.read diperlukan."),
-    )
-    def test_api_rejects_token_without_scope(self, introspect_mock):
-        response = self.client.get(
-            reverse("verification:indicator-api", args=["bor"]),
-            HTTP_AUTHORIZATION="Bearer opaque-token-salah-scope",
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertIn("insufficient_scope", response["WWW-Authenticate"])
-
 
 @override_settings(
     SIMADU_TOKEN_URL="https://simadu.example/o/token/",
@@ -170,7 +118,6 @@ class VerificationFlowTests(TestCase):
     SIMADU_INTROSPECTION_CLIENT_SECRET="introspection-secret",
     SIMADU_INTROSPECTION_CACHE_SECONDS=30,
     SIMADU_OAUTH_TIMEOUT=10,
-    SIMADU_ALLOWED_API_CLIENTS={"mitra-test"},
 )
 class OAuthOpaqueTests(TestCase):
     def setUp(self):
@@ -196,23 +143,124 @@ class OAuthOpaqueTests(TestCase):
         self.assertIn(b"grant_type=client_credentials", request.data)
 
     @patch("verification.oauth.urlopen")
-    def test_introspection_validates_scope_client_and_uses_cache(self, urlopen_mock):
+    def test_introspection_validates_token_and_uses_cache(self, urlopen_mock):
         urlopen_mock.return_value = BytesIO(
-            json.dumps(
-                {
-                    "active": True,
-                    "client_id": "mitra-test",
-                    "scope": "datahub.indicators.read",
-                    "exp": 4102444800,
-                }
-            ).encode()
+            json.dumps({"active": True, "client_id": "mitra-test", "scope": "read:dash", "exp": 4102444800}).encode()
         )
-        first = introspect_access_token(
-            "opaque-third-party", required_scope="datahub.indicators.read"
-        )
-        second = introspect_access_token(
-            "opaque-third-party", required_scope="datahub.indicators.read"
-        )
+        first = introspect_raw_access_token("opaque-third-party")
+        second = introspect_raw_access_token("opaque-third-party")
         self.assertEqual(first["client_id"], "mitra-test")
         self.assertEqual(second["client_id"], "mitra-test")
         self.assertEqual(urlopen_mock.call_count, 1)
+
+
+class MonthlyHealthMetadataTests(TestCase):
+    def test_metadata_payload_is_normalized_and_copied_for_verification(self):
+        source = store_monthly_health_indicators(
+            period=date(2026, 7, 1),
+            payload={
+                "hospital": {"code": "RS-MANDALIKA", "name": "RS Mandalika"},
+                "visits": [
+                    {"installation": "outpatient", "payment_status": "bpjs", "count": 120},
+                    {"installation": "inpatient", "payment_status": "general", "count": 20},
+                    {"installation": "emergency", "payment_status": "other", "count": 15},
+                ],
+                "top_diseases": [{"installation": "outpatient", "icd10_code": "J06.9", "name": "ISPA", "patient_count": 30}],
+                "tourist_visits": [{"category": "domestic", "origin": "Bali", "count": 7}],
+                "disease_groups": [{"code": "cancer", "patient_count": 8}],
+            },
+        )
+        self.assertEqual(source.verification.verified_data["visits"][0]["count"], 120)
+        self.assertEqual(source.source_data["disease_groups"][0]["icd10_range"], "C00-C96,D00-D48")
+        self.assertEqual(VerifiedHealthVisitRow.objects.filter(verification=source.verification).count(), 3)
+        self.assertEqual(VerifiedTopDiseaseRow.objects.filter(verification=source.verification).count(), 1)
+        self.assertEqual(VerifiedTouristVisitRow.objects.filter(verification=source.verification).count(), 1)
+        self.assertEqual(VerifiedDiseaseGroupRow.objects.filter(verification=source.verification).count(), 1)
+
+    def test_patient_satisfaction_is_discarded_from_source(self):
+        source = store_monthly_health_indicators(
+            period=date(2026, 8, 1),
+            payload={
+                "hospital": {"code": "RS-MANDALIKA", "name": "RS Mandalika"},
+                "patient_satisfaction": {"score": 90, "respondents": 20},
+            },
+        )
+        self.assertNotIn("patient_satisfaction", source.source_data)
+        self.assertNotIn("patient_satisfaction", source.verification.verified_data)
+
+
+class UserRoleTests(TestCase):
+    def test_default_groups_have_separated_permissions(self):
+        from django.contrib.auth.models import Group
+
+        operator = Group.objects.get(name="Petugas Data")
+        verifier = Group.objects.get(name="Verifikator")
+        administrator = Group.objects.get(name="Administrator DataHub")
+        reader = Group.objects.get(name="Pembaca")
+
+        self.assertTrue(operator.permissions.filter(codename="add_inpatientindicatorsource").exists())
+        self.assertFalse(operator.permissions.filter(codename="approve_verifiedinpatientindicator").exists())
+        self.assertTrue(verifier.permissions.filter(codename="approve_verifiedinpatientindicator").exists())
+        self.assertFalse(verifier.permissions.filter(codename="add_inpatientindicatorsource").exists())
+        self.assertTrue(administrator.permissions.filter(codename="add_inpatientindicatorsource").exists())
+        self.assertTrue(administrator.permissions.filter(codename="approve_verifiedinpatientindicator").exists())
+        self.assertEqual(reader.permissions.count(), 0)
+
+
+class FlexiblePeriodAndRowFormTests(TestCase):
+    def test_supported_reporting_period_ranges(self):
+        cases = [
+            ({"period_type": "month", "year": 2026, "month": 2}, date(2026, 2, 1), date(2026, 2, 28)),
+            ({"period_type": "quarter", "year": 2026, "quarter": 3}, date(2026, 7, 1), date(2026, 9, 30)),
+            ({"period_type": "semester", "year": 2026, "semester": 2}, date(2026, 7, 1), date(2026, 12, 31)),
+            ({"period_type": "year", "year": 2026}, date(2026, 1, 1), date(2026, 12, 31)),
+        ]
+        for data, expected_start, expected_end in cases:
+            form = IndicatorPeriodForm(data)
+            self.assertTrue(form.is_valid(), form.errors)
+            self.assertEqual(form.cleaned_data["period_start"], expected_start)
+            self.assertEqual(form.cleaned_data["period_end"], expected_end)
+
+    def test_health_verification_form_rebuilds_json_from_rows(self):
+        payload = {
+            "hospital": {"code": "RS-MANDALIKA", "name": "RS Mandalika"},
+            "visits": [{"installation": "outpatient", "payment_status": "bpjs", "count": 10}],
+            "top_diseases": [{"installation": "outpatient", "icd10_code": "I10", "name": "Hipertensi", "patient_count": 5}],
+            "tourist_visits": [{"category": "domestic", "origin": "Bali", "count": 2}],
+            "disease_groups": [{"code": "heart", "patient_count": 3}],
+        }
+        form = MonthlyHealthVerificationForm(
+            {"visit_0_count": 12, "disease_0_code": "I10", "disease_0_name": "Hipertensi", "disease_0_count": 6, "tourist_0_origin": "Bali", "tourist_0_count": 4, "group_0_count": 7, "notes": "Sesuai"},
+            payload=payload,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["verified_data"]["visits"][0]["count"], 12)
+        self.assertEqual(form.cleaned_data["verified_data"]["disease_groups"][0]["patient_count"], 7)
+
+
+class DynamicSimrsEndpointTests(TestCase):
+    def test_database_endpoint_has_priority_over_environment_fallback(self):
+        endpoint = SimrsApiEndpoint.objects.get(code=SimrsApiEndpoint.Code.INPATIENT_INDICATORS)
+        endpoint.url = "https://simrs.example/api/inpatient/"
+        endpoint.timeout_seconds = 45
+        endpoint.save()
+
+        self.assertEqual(
+            resolve_simrs_endpoint(SimrsApiEndpoint.Code.INPATIENT_INDICATORS, "https://fallback.example/"),
+            ("https://simrs.example/api/inpatient/", 45),
+        )
+
+    def test_inactive_database_endpoint_does_not_fall_back_silently(self):
+        endpoint = SimrsApiEndpoint.objects.get(code=SimrsApiEndpoint.Code.INPATIENT_INDICATORS)
+        endpoint.is_active = False
+        endpoint.save()
+
+        with self.assertRaises(ImproperlyConfigured):
+            resolve_simrs_endpoint(SimrsApiEndpoint.Code.INPATIENT_INDICATORS, "https://fallback.example/")
+
+    def test_environment_is_used_when_database_configuration_is_absent(self):
+        SimrsApiEndpoint.objects.filter(code=SimrsApiEndpoint.Code.HEALTH_AGGREGATE).delete()
+        self.assertEqual(
+            resolve_simrs_endpoint(SimrsApiEndpoint.Code.HEALTH_AGGREGATE, "https://fallback.example/health/"),
+            ("https://fallback.example/health/", 30),
+        )
