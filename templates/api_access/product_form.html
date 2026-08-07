@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Ubah Produk API — DataHub{% endblock %}
+{% block heading %}Ubah produk API{% endblock %}
+{% block content %}
+<form method="post" class="management-form compact-form">{% csrf_token %}
+  {{ form.non_field_errors }}
+  <section class="panel form-section">
+    <div class="section-heading"><div><h2>{{ product.name }}</h2><p>Kode <code>{{ product.code }}</code> tetap digunakan agar kontrak akses client tidak berubah.</p></div></div>
+    <div class="form-grid">
+      <label>{{ form.name.label }}{{ form.name }}{{ form.name.errors }}</label>
+      <label>{{ form.required_scope.label }}{{ form.required_scope }}{{ form.required_scope.errors }}</label>
+      <label class="full-row">{{ form.description.label }}{{ form.description }}{{ form.description.errors }}</label>
+      <label class="toggle-field full-row">{{ form.is_active }}<span><strong>Produk aktif</strong><small>Produk dapat diberikan sebagai hak akses kepada client eksternal.</small></span>{{ form.is_active.errors }}</label>
+    </div>
+  </section>
+  <div class="form-actions"><a class="button secondary" href="{% url 'api_access:overview' %}">Batal</a><button class="primary" type="submit">Simpan perubahan produk</button></div>
+</form>
+{% endblock %}

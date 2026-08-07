@@ -11,12 +11,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import (
-    DataSource,
     InpatientIndicatorSource,
-    StagedRecord,
-    VerificationAudit,
     VerifiedInpatientIndicator,
-    VerifiedRecord,
     VerifiedHealthVisitRow,
     VerifiedTopDiseaseRow,
     VerifiedTouristVisitRow,
@@ -35,44 +31,19 @@ class VerificationFlowTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = get_user_model().objects.create_user("verifikator", password="secret123")
-        self.user.user_permissions.add(
-            Permission.objects.get(codename="add_importbatch"),
-            Permission.objects.get(codename="change_verifiedrecord"),
-            Permission.objects.get(codename="approve_verifiedrecord"),
-        )
-        self.source = DataSource.objects.create(name="SIMRS Khanza", code="simrs-khanza")
         self.client.force_login(self.user)
 
-    def test_import_and_verify_record(self):
-        response = self.client.post(
-            reverse("verification:import"),
-            {
-                "source": self.source.pk,
-                "reference": "sinkron-001",
-                "record_type": "kunjungan",
-                "data": json.dumps([{"source_key": "2026/0001", "nama": "Pasien A"}]),
-            },
-        )
-        self.assertRedirects(response, reverse("verification:records"))
-        staged = StagedRecord.objects.get()
-        self.assertEqual(staged.status, StagedRecord.Status.PENDING)
+    def test_sidebar_marks_only_health_indicators_as_active(self):
+        response = self.client.get(reverse("verification:health-indicators"))
 
-        response = self.client.post(
-            reverse("verification:verify", args=[staged.pk]),
-            {
-                "verified_data_text": json.dumps(
-                    {"source_key": "2026/0001", "nama": "Pasien Valid"}
-                ),
-                "verification_notes": "Nama dikoreksi",
-                "action": "approve",
-            },
+        self.assertContains(
+            response,
+            f'href="{reverse("verification:health-indicators")}" class="active" aria-current="page"',
         )
-        self.assertRedirects(response, reverse("verification:records"))
-        staged.refresh_from_db()
-        verified = VerifiedRecord.objects.get()
-        self.assertEqual(staged.status, StagedRecord.Status.VERIFIED)
-        self.assertEqual(verified.status, VerifiedRecord.Status.APPROVED)
-        self.assertGreaterEqual(VerificationAudit.objects.count(), 2)
+        self.assertNotContains(
+            response,
+            f'href="{reverse("verification:indicators")}" class="active"',
+        )
 
     def test_verified_indicator_keeps_source_snapshot_unchanged(self):
         source = store_inpatient_indicator(

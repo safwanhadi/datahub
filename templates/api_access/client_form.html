@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{% if client.pk %}Ubah Client API{% else %}Tambah Client API{% endif %} — DataHub{% endblock %}
+{% block heading %}{% if client.pk %}Ubah client API{% else %}Tambah client API{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="management-form">{% csrf_token %}
+  {{ form.non_field_errors }}
+  <section class="panel form-section">
+    <div class="section-heading"><div><h2>Identitas aplikasi</h2><p>Daftarkan identitas OAuth dan batas pemakaian aplikasi eksternal.</p></div></div>
+    <div class="form-grid">
+      <label>{{ form.name.label }}{{ form.name }}{{ form.name.errors }}</label>
+      <label>{{ form.client_id.label }}{{ form.client_id }}{{ form.client_id.errors }}<small>Harus sama dengan Client ID yang diterbitkan SIMADU.</small></label>
+      <label>{{ form.requests_per_minute.label }}{{ form.requests_per_minute }}{{ form.requests_per_minute.errors }}<small>Batas jumlah permintaan dari client setiap menit.</small></label>
+      <label class="toggle-field">{{ form.is_active }}<span><strong>Client aktif</strong><small>Client dapat memakai seluruh hak akses aktif di bawah ini.</small></span>{{ form.is_active.errors }}</label>
+    </div>
+  </section>
+
+  <section class="panel form-section">
+    <div class="section-heading"><div><h2>Hak akses produk API</h2><p>Tambahkan satu atau beberapa produk. Semua izin disimpan bersamaan dengan client.</p></div></div>
+    {{ formset.management_form }}{{ formset.non_form_errors }}
+    <div class="grant-head" aria-hidden="true"><span>Produk API</span><span>Berlaku sampai</span><span>Status</span><span>Tindakan</span></div>
+    <div class="grant-list" id="grant-formset">
+      {% for grant_form in formset %}<div class="grant-row">
+        {% for hidden in grant_form.hidden_fields %}{{ hidden }}{% endfor %}
+        <label><span class="mobile-label">Produk API</span>{{ grant_form.product }}{{ grant_form.product.errors }}</label>
+        <label><span class="mobile-label">Berlaku sampai</span>{{ grant_form.expires_at }}{{ grant_form.expires_at.errors }}<small>Kosongkan jika tidak berbatas waktu.</small></label>
+        <label class="check-label">{{ grant_form.is_active }} <span>Izin aktif</span></label>
+        <label class="delete-grant">{{ grant_form.DELETE }} <span>Hapus izin</span></label>
+      </div>{% endfor %}
+    </div>
+    <template id="empty-grant-form"><div class="grant-row">
+      {% with grant_form=formset.empty_form %}{% for hidden in grant_form.hidden_fields %}{{ hidden }}{% endfor %}
+      <label><span class="mobile-label">Produk API</span>{{ grant_form.product }}</label>
+      <label><span class="mobile-label">Berlaku sampai</span>{{ grant_form.expires_at }}<small>Kosongkan jika tidak berbatas waktu.</small></label>
+      <label class="check-label">{{ grant_form.is_active }} <span>Izin aktif</span></label>
+      <label class="delete-grant">{{ grant_form.DELETE }} <span>Hapus izin</span></label>{% endwith %}
+    </div></template>
+    <button class="button secondary add-grant" id="add-grant" type="button">+ Tambah izin produk</button>
+  </section>
+
+  <div class="form-actions"><a class="button secondary" href="{% url 'api_access:overview' %}">Batal</a><button class="primary" type="submit">{% if client.pk %}Simpan client &amp; hak akses{% else %}Buat client &amp; hak akses{% endif %}</button></div>
+</form>
+<script>
+  (() => {
+    const list = document.querySelector("#grant-formset");
+    const total = document.querySelector("#id_grants-TOTAL_FORMS");
+    const template = document.querySelector("#empty-grant-form");
+    document.querySelector("#add-grant").addEventListener("click", () => {
+      const index = Number(total.value);
+      list.insertAdjacentHTML("beforeend", template.innerHTML.replaceAll("__prefix__", index));
+      total.value = index + 1;
+    });
+  })();
+</script>
+{% endblock %}

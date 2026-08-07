@@ -6,9 +6,9 @@ app_name = "verification"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
-    path("data/", views.record_list, name="records"),
-    path("data/impor/", views.import_data, name="import"),
-    path("data/<uuid:pk>/verifikasi/", views.verify_record, name="verify"),
+    path("standar-indikator/", views.indicator_standard_list, name="standard-list"),
+    path("standar-indikator/tambah/", views.indicator_standard_edit, name="standard-create"),
+    path("standar-indikator/<int:pk>/ubah/", views.indicator_standard_edit, name="standard-edit"),
     path("indikator-rawat-inap/", views.inpatient_indicators, name="indicators"),
     path("indikator-rawat-inap/ambil/", views.sync_inpatient_indicators, name="indicator-sync"),
     path("indikator-rawat-inap/<uuid:pk>/verifikasi/", views.verify_inpatient_indicators, name="indicator-verify"),

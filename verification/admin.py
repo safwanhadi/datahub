@@ -1,23 +1,30 @@
 from django.contrib import admin
 
 from .models import (
-    DataSource,
     SimrsApiEndpoint,
-    ImportBatch,
+    InpatientIndicatorStandard,
     InpatientIndicatorAudit,
     InpatientIndicatorSource,
     MonthlyHealthIndicatorAudit,
     MonthlyHealthIndicatorSource,
-    StagedRecord,
-    VerificationAudit,
     VerifiedInpatientIndicator,
     VerifiedMonthlyHealthIndicator,
     VerifiedHealthVisitRow,
     VerifiedTopDiseaseRow,
     VerifiedTouristVisitRow,
     VerifiedDiseaseGroupRow,
-    VerifiedRecord,
 )
+
+
+@admin.register(InpatientIndicatorStandard)
+class InpatientIndicatorStandardAdmin(admin.ModelAdmin):
+    list_display = ("indicator", "policy_level", "minimum_value", "maximum_value", "effective_from", "effective_until", "is_active")
+    list_filter = ("indicator", "policy_level", "is_active")
+    readonly_fields = ("created_at", "updated_at", "updated_by")
+
+    def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(SimrsApiEndpoint)
@@ -71,40 +78,6 @@ class VerifiedMonthlyHealthIndicatorAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     readonly_fields = ("source", "period", "verified_data", "verified_by", "verified_at", "updated_at")
     inlines = (VerifiedHealthVisitRowInline, VerifiedTopDiseaseRowInline, VerifiedTouristVisitRowInline, VerifiedDiseaseGroupRowInline, MonthlyHealthIndicatorAuditInline)
-
-
-@admin.register(DataSource)
-class DataSourceAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "is_active", "created_at")
-    prepopulated_fields = {"code": ("name",)}
-
-
-@admin.register(ImportBatch)
-class ImportBatchAdmin(admin.ModelAdmin):
-    list_display = ("reference", "source", "status", "total_records", "created_at")
-    list_filter = ("status", "source")
-
-
-@admin.register(StagedRecord)
-class StagedRecordAdmin(admin.ModelAdmin):
-    list_display = ("source_key", "record_type", "status", "imported_at")
-    list_filter = ("status", "record_type", "batch__source")
-    search_fields = ("source_key",)
-    readonly_fields = ("checksum",)
-
-
-class AuditInline(admin.TabularInline):
-    model = VerificationAudit
-    extra = 0
-    readonly_fields = ("action", "before_data", "after_data", "notes", "actor", "created_at")
-    can_delete = False
-
-
-@admin.register(VerifiedRecord)
-class VerifiedRecordAdmin(admin.ModelAdmin):
-    list_display = ("staged_record", "status", "verified_by", "updated_at")
-    list_filter = ("status",)
-    inlines = (AuditInline,)
 
 
 @admin.register(InpatientIndicatorSource)

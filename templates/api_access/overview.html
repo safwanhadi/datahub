@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Akses API — DataHub{% endblock %}
+{% block heading %}Akses API{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-title page-toolbar"><div><h2>Client eksternal</h2><p>Aplikasi yang diizinkan membaca API DataHub.</p></div><a class="button primary" href="{% url 'api_access:client-create' %}">+ Tambah client API</a></div>
+  <div class="table-wrap"><table><thead><tr><th>Aplikasi</th><th>Client ID</th><th>Batas request</th><th>Hak akses</th><th>Status</th><th class="right">Tindakan</th></tr></thead><tbody>
+  {% for client in clients %}<tr><td><strong>{{ client.name }}</strong></td><td><code>{{ client.client_id }}</code></td><td>{{ client.requests_per_minute }}/menit</td><td><div class="badge-list">{% for grant in client.grants.all %}<span class="badge {% if grant.is_valid %}approved{% else %}neutral{% endif %}">{{ grant.product.name }}</span>{% empty %}<span class="empty-inline">Belum ada</span>{% endfor %}</div></td><td><span class="badge {% if client.is_active %}approved{% else %}rejected{% endif %}">{% if client.is_active %}Aktif{% else %}Nonaktif{% endif %}</span></td><td class="right"><a class="button secondary small" href="{% url 'api_access:client-edit' client.pk %}">Ubah client &amp; izin</a></td></tr>
+  {% empty %}<tr><td colspan="6" class="empty">Belum ada client API.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+<section class="panel section-gap">
+  <div class="panel-title"><div><h2>Produk API</h2><p>Endpoint yang dapat diberikan kepada client eksternal.</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Produk</th><th>Kode</th><th>Scope wajib</th><th>Status</th><th class="right">Tindakan</th></tr></thead><tbody>
+  {% for product in products %}<tr><td><strong>{{ product.name }}</strong><small>{{ product.description|default:"Tanpa keterangan" }}</small></td><td><code>{{ product.code }}</code></td><td><code>{{ product.required_scope }}</code></td><td><span class="badge {% if product.is_active %}approved{% else %}rejected{% endif %}">{% if product.is_active %}Aktif{% else %}Nonaktif{% endif %}</span></td><td class="right"><a class="button secondary small" href="{% url 'api_access:product-edit' product.pk %}">Ubah produk</a></td></tr>{% endfor %}</tbody></table></div>
+</section>
+<section class="panel section-gap">
+  <div class="panel-title"><div><h2>Aktivitas API terbaru</h2><p>30 permintaan terakhir dari client eksternal.</p></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Client</th><th>Produk</th><th>Request</th><th>Status</th><th>Alamat IP</th></tr></thead><tbody>
+  {% for log in logs %}<tr><td>{{ log.created_at|date:"d M Y H:i:s" }}</td><td>{{ log.client_id }}</td><td>{{ log.product_code }}</td><td><code>{{ log.method }} {{ log.path }}</code></td><td><span class="badge {% if log.status_code < 400 %}approved{% else %}rejected{% endif %}">{{ log.status_code }}</span></td><td>{{ log.remote_address|default:"—" }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="empty">Belum ada aktivitas API.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

@@ -7,15 +7,16 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.models import Group
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import AccountProfile
+from .forms import ManagedUserForm
 from .sso import (
     SimaduSSOError,
     authorization_url,
@@ -207,3 +208,40 @@ def simadu_callback(request):
 @login_required
 def account_detail(request):
     return render(request, "myaccount/detail.html")
+
+
+def _is_datahub_admin(user):
+    return user.is_authenticated and (
+        user.is_superuser or user.groups.filter(name="Administrator DataHub").exists()
+    )
+
+
+datahub_admin_required = user_passes_test(_is_datahub_admin, login_url="login")
+
+
+@datahub_admin_required
+def user_list(request):
+    users = get_user_model().objects.prefetch_related("groups").select_related("account_profile").order_by("username")
+    return render(request, "myaccount/user_list.html", {"users": users})
+
+
+@datahub_admin_required
+@transaction.atomic
+def user_edit(request, pk=None):
+    User = get_user_model()
+    user = get_object_or_404(User, pk=pk) if pk else User()
+    if user.is_superuser and not request.user.is_superuser:
+        messages.error(request, "Hanya superuser yang dapat mengubah akun superuser.")
+        return redirect("myaccount:user-list")
+    form = ManagedUserForm(request.POST or None, instance=user)
+    if request.method == "POST" and form.is_valid():
+        if user.pk == request.user.pk and not form.cleaned_data["is_active"]:
+            form.add_error("is_active", "Anda tidak dapat menonaktifkan akun sendiri.")
+        elif user.pk == request.user.pk and not form.cleaned_data["roles"].filter(name="Administrator DataHub").exists() and not request.user.is_superuser:
+            form.add_error("roles", "Anda tidak dapat menghapus peran administrator dari akun sendiri.")
+        else:
+            saved_user = form.save()
+            AccountProfile.objects.get_or_create(user=saved_user)
+            messages.success(request, "Akun pengguna berhasil disimpan.")
+            return redirect("myaccount:user-list")
+    return render(request, "myaccount/user_form.html", {"form": form, "managed_user": user})

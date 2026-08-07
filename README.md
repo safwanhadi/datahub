@@ -1,9 +1,9 @@
 # SIMRS DataHub (Django)
 
-Aplikasi penampung dan verifikasi data SIMRS. Data sumber masuk ke tabel staging yang
-tidak diedit. Ketika pemeriksaan dimulai, aplikasi menyalinnya ke tabel verifikasi;
-setiap koreksi dan persetujuan dicatat dalam audit trail. Hanya data yang disetujui
-yang tersedia melalui API pihak ketiga.
+Aplikasi pengambilan dan verifikasi indikator SIMRS. Data sumber diambil dari
+endpoint SIMRS pada masing-masing menu indikator dan disimpan sebagai snapshot
+yang tidak diedit. Koreksi dilakukan pada salinan verifikasi dan dicatat dalam
+audit trail. Hanya data yang disetujui yang tersedia melalui API pihak ketiga.
 
 Alur operasional lengkap tersedia di [FLOW_PENGGUNAAN.md](FLOW_PENGGUNAAN.md).
 
@@ -15,8 +15,9 @@ Alur operasional lengkap tersedia di [FLOW_PENGGUNAAN.md](FLOW_PENGGUNAAN.md).
 .\venv\Scripts\python.exe manage.py runserver
 ```
 
-Buka `http://127.0.0.1:8000/`. Buat `Data Source` melalui halaman admin, lalu berikan
-izin `add import batch` dan `change verified record` kepada grup verifikator.
+Buka `http://127.0.0.1:8000/`. Endpoint sumber dikelola melalui menu
+**Administrasi → Endpoint API SIMRS**. Hak akses operasional tersedia melalui
+grup Petugas Data, Verifikator, Administrator DataHub, dan Pembaca.
 
 Untuk ikon aplikasi pada portal SIMADU, gunakan launch URL
 `/accounts/simadu/launch/`. Endpoint ini membuat state dan PKCE sebelum menuju
@@ -30,17 +31,9 @@ SIMRS**. Konfigurasi database memiliki prioritas atas environment; environment
 tetap dipakai sebagai fallback untuk kompatibilitas. Credential OAuth dan
 client secret tetap wajib disimpan di environment, bukan database.
 
-UI **Impor SIMRS** menerima array JSON berikut:
-
-```json
-[
-  {"source_key": "2026/000001", "no_rawat": "2026/000001", "nama": "Pasien A"}
-]
-```
-
-`source_key` wajib unik di dalam satu batch. Untuk integrasi produksi, pemanggilan
-query/view SIMRS sebaiknya dibuat sebagai management command terjadwal dan tetap
-memanggil fungsi `verification.services.import_records`.
+Pengambilan data dilakukan melalui tombol **Ambil dari SIMRS** pada menu
+**Indikator Rawat Inap** dan **Indikator Kesehatan**. Tidak ada impor JSON generik;
+setiap kelompok data mengikuti kontrak dan validasi indikatornya sendiri.
 
 ## API pihak ketiga
 
@@ -48,10 +41,8 @@ DataHub tidak menerbitkan token lokal. Setiap aplikasi pihak ketiga meminta opaq
 access token ke SIMADU menggunakan `client_credentials`, lalu mengirimkannya ke
 DataHub:
 
-```http
-GET /api/external/v1/records/kunjungan/?limit=100
-Authorization: Bearer opaque-access-token-dari-simadu
-```
+Endpoint eksternal yang tersedia adalah indikator rawat inap dan indikator
+kesehatan sebagaimana tercantum pada Swagger `/docs/external/`.
 
 DataHub memvalidasi token melalui introspection SIMADU dan mewajibkan scope
 `read:dash`.
@@ -163,12 +154,6 @@ Enam produk indikator dibuat otomatis oleh migrasi dengan kode
 2. Buat **Client API eksternal** di Django Admin dengan `client_id` yang sama.
 3. Tambahkan hanya **Izin client eksternal** yang disetujui.
 4. Atur batas request per menit dan, bila diperlukan, tanggal kedaluwarsa grant.
-
-Endpoint record menggunakan produk dinamis bernama `records-<record_type>`.
-Contohnya, akses `/api/external/v1/records/kunjungan/` memerlukan produk
-`records-kunjungan`. Produk tersebut harus dibuat terlebih dahulu melalui
-Django Admin beserta scope wajibnya. Respons eksternal hanya membaca data
-berstatus disetujui atau dipublikasikan, dan seluruh akses dicatat sebagai audit.
 
 ### Indikator kesehatan rumah sakit
 

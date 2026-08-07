@@ -4,12 +4,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from verification.models import VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedRecord
+from verification.models import VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
 
 from .serializers import (
     InternalIndicatorEnvelopeSerializer,
     InternalMonthlyHealthEnvelopeSerializer,
-    InternalRecordEnvelopeSerializer,
 )
 
 
@@ -55,39 +54,6 @@ class InternalIndicatorList(APIView):
             for item in records
         ]
         return Response({"count": len(results), "results": results})
-
-
-class InternalVerifiedRecordList(APIView):
-    authentication_classes = (SessionAuthentication,)
-    permission_classes = (IsAuthenticated,)
-
-    @extend_schema(
-        tags=["Internal - Data Terverifikasi"],
-        parameters=[OpenApiParameter("limit", int, description="Maksimal 500")],
-        responses=InternalRecordEnvelopeSerializer,
-    )
-    def get(self, request, record_type):
-        try:
-            limit = min(max(int(request.query_params.get("limit", 100)), 1), 500)
-        except ValueError:
-            return Response({"detail": "Parameter limit harus berupa angka."}, status=400)
-        records = VerifiedRecord.objects.filter(
-            staged_record__record_type=record_type
-        ).select_related("staged_record", "verified_by")[:limit]
-        results = [
-            {
-                "id": item.id,
-                "record_type": item.staged_record.record_type,
-                "source_key": item.staged_record.source_key,
-                "status": item.status,
-                "data": item.verified_data,
-                "verified_by": item.verified_by.get_username() if item.verified_by else None,
-                "approved_at": item.approved_at,
-                "updated_at": item.updated_at,
-            }
-            for item in records
-        ]
-        return Response({"record_type": record_type, "count": len(results), "results": results})
 
 
 class InternalMonthlyHealthList(APIView):

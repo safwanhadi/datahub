@@ -2,12 +2,41 @@ import hashlib
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from urllib.parse import parse_qs, urlparse
 
 from .models import AccountProfile
 from .views import SSO_STATE_SESSION_KEY, SSO_VERIFIER_SESSION_KEY
+
+
+class AccountManagementTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user("account-admin", password="secret")
+        self.admin.groups.add(Group.objects.get(name="Administrator DataHub"))
+        self.client.force_login(self.admin)
+
+    def test_admin_can_create_user_and_assign_role(self):
+        verifier = Group.objects.get(name="Verifikator")
+        response = self.client.post(reverse("myaccount:user-create"), {
+            "username": "new-verifier", "first_name": "New", "last_name": "Verifier",
+            "email": "verifier@example.test", "is_active": "on",
+            "roles": [str(verifier.pk)], "new_password": "safe-test-password",
+        })
+        self.assertRedirects(response, reverse("myaccount:user-list"))
+        user = get_user_model().objects.get(username="new-verifier")
+        self.assertTrue(user.groups.filter(name="Verifikator").exists())
+        self.assertTrue(user.check_password("safe-test-password"))
+
+    def test_admin_cannot_deactivate_own_account(self):
+        response = self.client.post(reverse("myaccount:user-edit", args=[self.admin.pk]), {
+            "username": self.admin.username, "first_name": "", "last_name": "",
+            "email": "", "roles": [str(self.admin.groups.get().pk)], "new_password": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)

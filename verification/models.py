@@ -1,26 +1,11 @@
 import hashlib
 import secrets
 import uuid
+from django.utils import timezone
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-
-
-class DataSource(models.Model):
-    name = models.CharField("nama sumber", max_length=120, unique=True)
-    code = models.SlugField("kode", max_length=60, unique=True)
-    description = models.TextField("keterangan", blank=True)
-    is_active = models.BooleanField("aktif", default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name = "sumber data"
-        verbose_name_plural = "sumber data"
-        ordering = ("name",)
-
-    def __str__(self):
-        return self.name
 
 
 class SimrsApiEndpoint(models.Model):
@@ -56,123 +41,57 @@ class SimrsApiEndpoint(models.Model):
         return f"{self.name} ({self.code})"
 
 
-class ImportBatch(models.Model):
-    class Status(models.TextChoices):
-        PROCESSING = "processing", "Diproses"
-        COMPLETED = "completed", "Selesai"
-        FAILED = "failed", "Gagal"
+class InpatientIndicatorStandard(models.Model):
+    class Indicator(models.TextChoices):
+        ALOS = "alos", "ALOS"
+        BOR = "bor", "BOR"
+        BTO = "bto", "BTO"
+        TOI = "toi", "TOI"
+        GDR = "gdr", "GDR"
+        NDR = "ndr", "NDR"
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    source = models.ForeignKey(DataSource, on_delete=models.PROTECT, related_name="batches")
-    reference = models.CharField("referensi", max_length=150, blank=True)
-    status = models.CharField(max_length=20, choices=Status, default=Status.PROCESSING)
-    total_records = models.PositiveIntegerField(default=0)
-    imported_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
-    )
-    error_message = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    class PolicyLevel(models.TextChoices):
+        NATIONAL = "national", "Kebijakan nasional"
+        INTERNAL = "internal", "Kebijakan internal"
 
-    class Meta:
-        ordering = ("-created_at",)
+    class PeriodBasis(models.TextChoices):
+        REPORTING = "reporting", "Sesuai periode laporan"
+        ANNUAL = "annual", "Tahunan (annualisasi)"
 
-    def __str__(self):
-        return self.reference or str(self.id)
-
-
-class StagedRecord(models.Model):
-    class Status(models.TextChoices):
-        PENDING = "pending", "Menunggu"
-        IN_REVIEW = "in_review", "Sedang diperiksa"
-        VERIFIED = "verified", "Terverifikasi"
-        REJECTED = "rejected", "Ditolak"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    batch = models.ForeignKey(ImportBatch, on_delete=models.PROTECT, related_name="records")
-    source_key = models.CharField("kunci data SIMRS", max_length=190)
-    record_type = models.CharField("jenis data", max_length=80, db_index=True)
-    raw_data = models.JSONField("data asli")
-    source_updated_at = models.DateTimeField(null=True, blank=True)
-    checksum = models.CharField(max_length=64, editable=False)
-    status = models.CharField(max_length=20, choices=Status, default=Status.PENDING, db_index=True)
-    imported_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ("-imported_at",)
-        constraints = [
-            models.UniqueConstraint(
-                fields=("batch", "source_key"), name="unique_source_key_per_batch"
-            )
-        ]
-        indexes = [models.Index(fields=("record_type", "status"))]
-
-    def clean(self):
-        if not isinstance(self.raw_data, dict):
-            raise ValidationError({"raw_data": "Data harus berupa objek JSON."})
-
-    def save(self, *args, **kwargs):
-        import json
-
-        normalized = json.dumps(self.raw_data, sort_keys=True, separators=(",", ":"))
-        self.checksum = hashlib.sha256(normalized.encode()).hexdigest()
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.record_type}: {self.source_key}"
-
-
-class VerifiedRecord(models.Model):
-    class Status(models.TextChoices):
-        DRAFT = "draft", "Draf"
-        APPROVED = "approved", "Disetujui"
-        PUBLISHED = "published", "Dipublikasikan"
-        REJECTED = "rejected", "Ditolak"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    staged_record = models.OneToOneField(
-        StagedRecord, on_delete=models.PROTECT, related_name="verified_record"
-    )
-    verified_data = models.JSONField("data hasil verifikasi")
-    status = models.CharField(max_length=20, choices=Status, default=Status.DRAFT, db_index=True)
-    verification_notes = models.TextField("catatan verifikasi", blank=True)
-    verified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="verified_records",
-    )
+    indicator = models.CharField("indikator", max_length=10, choices=Indicator)
+    policy_level = models.CharField("tingkat kebijakan", max_length=10, choices=PolicyLevel)
+    minimum_value = models.DecimalField("batas bawah", max_digits=12, decimal_places=2, null=True, blank=True)
+    maximum_value = models.DecimalField("batas atas", max_digits=12, decimal_places=2, null=True, blank=True)
+    maximum_exclusive = models.BooleanField("batas atas harus kurang dari", default=False)
+    unit = models.CharField("satuan", max_length=40)
+    period_basis = models.CharField("dasar periode", max_length=12, choices=PeriodBasis, default=PeriodBasis.REPORTING)
+    effective_from = models.DateField("berlaku mulai", default=timezone.localdate)
+    effective_until = models.DateField("berlaku sampai", null=True, blank=True)
+    reference_name = models.CharField("nama kebijakan/acuan", max_length=255)
+    reference_url = models.URLField("tautan acuan", max_length=500, blank=True)
+    notes = models.TextField("catatan", blank=True)
+    is_active = models.BooleanField("aktif", default=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="updated_indicator_standards")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    approved_at = models.DateTimeField(null=True, blank=True)
-    published_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ("-updated_at",)
-        permissions = (("approve_verifiedrecord", "Can approve verified record"),)
+        ordering = ("indicator", "-effective_from", "-policy_level")
+        constraints = [models.UniqueConstraint(fields=("indicator", "policy_level", "effective_from"), name="unique_indicator_policy_start")]
+        verbose_name = "standar indikator rawat inap"
+        verbose_name_plural = "standar indikator rawat inap"
 
     def clean(self):
-        if not isinstance(self.verified_data, dict):
-            raise ValidationError({"verified_data": "Data harus berupa objek JSON."})
+        super().clean()
+        if self.minimum_value is None and self.maximum_value is None:
+            raise ValidationError("Isi minimal salah satu batas standar.")
+        if self.minimum_value is not None and self.maximum_value is not None and self.minimum_value > self.maximum_value:
+            raise ValidationError({"maximum_value": "Batas atas harus lebih besar atau sama dengan batas bawah."})
+        if self.effective_until and self.effective_until < self.effective_from:
+            raise ValidationError({"effective_until": "Tanggal akhir tidak boleh sebelum tanggal mulai."})
 
     def __str__(self):
-        return f"Verifikasi {self.staged_record}"
-
-
-class VerificationAudit(models.Model):
-    record = models.ForeignKey(VerifiedRecord, on_delete=models.CASCADE, related_name="audits")
-    action = models.CharField(max_length=40)
-    before_data = models.JSONField(null=True, blank=True)
-    after_data = models.JSONField(null=True, blank=True)
-    notes = models.TextField(blank=True)
-    actor = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ("-created_at",)
+        return f"{self.get_indicator_display()} — {self.get_policy_level_display()} ({self.effective_from:%d-%m-%Y})"
 
 
 class ExternalApiToken(models.Model):
