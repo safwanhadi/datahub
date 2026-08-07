@@ -1,20 +1,49 @@
 {% extends "base.html" %}
-{% block heading %}Ringkasan operasional{% endblock %}
+{% block title %}Dashboard Analitik — DataHub{% endblock %}
+{% block heading %}Dashboard hasil verifikasi & analitik{% endblock %}
 {% block content %}
-<section class="metrics">
-  <article><span>Menunggu verifikasi</span><strong>{{ counts.pending|default:0 }}</strong><small>Data baru dari SIMRS</small></article>
-  <article><span>Sedang diperiksa</span><strong>{{ counts.in_review|default:0 }}</strong><small>Dalam meja verifikator</small></article>
-  <article><span>Terverifikasi</span><strong>{{ counts.verified|default:0 }}</strong><small>Siap dibagikan via API</small></article>
-  <article><span>Ditolak</span><strong>{{ counts.rejected|default:0 }}</strong><small>Perlu tindak lanjut</small></article>
+<section class="analytics-hero">
+  <div><span class="eyebrow">DATA SIAP KONSUMSI</span><h2>Ringkasan mutu pelayanan rumah sakit</h2><p>Analisis hanya menggunakan data yang telah disetujui verifikator sebelum diteruskan ke API internal maupun eksternal.</p></div>
+  {% if latest_inpatient %}<div class="period-chip"><small>Periode analisis</small><strong>{{ latest_inpatient.source.period_start|date:"d M Y" }} – {{ latest_inpatient.source.period_end|date:"d M Y" }}</strong><span>Diverifikasi {{ latest_inpatient.verified_at|date:"d M Y H:i" }}</span></div>{% endif %}
 </section>
-<section class="grid-two">
-  <div class="panel"><div class="panel-title"><div><h2>Antrian terbaru</h2><p>Data yang baru masuk dari sumber SIMRS</p></div><a href="{% url 'verification:records' %}">Lihat semua →</a></div>
-    <div class="table-wrap"><table><thead><tr><th>Kunci</th><th>Jenis</th><th>Status</th></tr></thead><tbody>
-    {% for item in recent_records %}<tr><td><strong>{{ item.source_key }}</strong><small>{{ item.batch.source.name }}</small></td><td>{{ item.record_type }}</td><td><span class="badge {{ item.status }}">{{ item.get_status_display }}</span></td></tr>
-    {% empty %}<tr><td colspan="3" class="empty">Belum ada data.</td></tr>{% endfor %}</tbody></table></div>
+
+<section class="metrics analytics-metrics">
+  <article><span>Periode terverifikasi</span><strong>{{ inpatient_approved }}</strong><small>Data rawat inap siap dianalisis</small></article>
+  <article><span>Sesuai standar</span><strong class="metric-good">{{ indicator_ideal }}</strong><small>Dari enam indikator terbaru</small></article>
+  <article><span>Perlu perhatian</span><strong class="metric-warning">{{ indicator_attention }}</strong><small>Indikator di luar batas acuan</small></article>
+  <article><span>Data kesehatan siap API</span><strong>{{ health_approved }}</strong><small>Periode kesehatan terverifikasi</small></article>
+</section>
+
+<section class="panel analytics-panel">
+  <div class="panel-title"><div><h2>Analisis indikator rawat inap</h2><p>Perbandingan hasil verifikasi terbaru terhadap standar pelayanan rumah sakit Kementerian Kesehatan.</p></div><a href="{% url 'verification:indicators' %}">Lihat data verifikasi →</a></div>
+  {% if indicator_analysis %}<div class="analysis-grid">
+    {% for item in indicator_analysis %}<article class="analysis-card {{ item.level }}">
+      <div class="analysis-card-head"><div><span>{{ item.name }}</span><small>{{ item.description }}</small></div><span class="analysis-status {{ item.level }}">{{ item.label }}</span></div>
+      <div class="analysis-value"><strong>{{ item.value }}</strong><span>{{ item.unit }}</span></div>
+      <div class="standard-row"><span>Standar acuan</span><strong>{{ item.standard }}</strong></div>
+      <div class="policy-row"><span>{{ item.policy_level }}</span>{% if item.reference_url %}<a href="{{ item.reference_url }}" target="_blank" rel="noopener">{{ item.reference_name }}</a>{% else %}<span>{{ item.reference_name }}</span>{% endif %}</div>
+      {% if item.comparison_note %}<p class="projection-note">{{ item.comparison_note }}</p>{% endif %}
+      <p class="analysis-copy">{{ item.analysis }}</p>
+    </article>{% endfor %}
+  </div>{% else %}<div class="empty-state"><strong>Belum ada hasil yang dapat dianalisis</strong><p>Setujui data indikator rawat inap terlebih dahulu. Dashboard tidak menganalisis data yang masih diperiksa.</p><a class="button primary" href="{% url 'verification:indicators' %}">Buka verifikasi indikator</a></div>{% endif %}
+</section>
+
+{% if inpatient_trend %}<section class="panel section-gap">
+  <div class="panel-title"><div><h2>Riwayat hasil terverifikasi</h2><p>Perbandingan enam periode terakhir untuk membaca arah perubahan indikator.</p></div></div>
+  <div class="table-wrap"><table class="indicator-table trend-table"><thead><tr><th>Periode</th><th>ALOS<small>hari</small></th><th>BOR<small>%</small></th><th>BTO<small>kali</small></th><th>TOI<small>hari</small></th><th>GDR<small>‰</small></th><th>NDR<small>‰</small></th></tr></thead><tbody>
+  {% for row in inpatient_trend %}<tr><td><strong>{{ row.source.period_start|date:"d M Y" }}</strong><small>s.d. {{ row.source.period_end|date:"d M Y" }}</small></td><td>{{ row.alos }}</td><td>{{ row.bor }}</td><td>{{ row.bto }}</td><td>{{ row.toi }}</td><td>{{ row.gdr }}</td><td>{{ row.ndr }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>{% endif %}
+
+<section class="grid-two section-gap">
+  <div class="panel"><div class="panel-title"><div><h2>Volume layanan kesehatan</h2><p>Ringkasan periode kesehatan terbaru yang telah diverifikasi.</p></div><a href="{% url 'verification:health-indicators' %}">Lihat data →</a></div>
+    {% if health_summary %}<div class="volume-grid"><div><span>Total kunjungan</span><strong>{{ health_summary.total_visits }}</strong></div><div><span>Rawat jalan</span><strong>{{ health_summary.outpatient }}</strong></div><div><span>Rawat inap</span><strong>{{ health_summary.inpatient }}</strong></div><div><span>IGD</span><strong>{{ health_summary.emergency }}</strong></div></div><p class="data-note">Angka volume ditampilkan sebagai informasi deskriptif karena belum memiliki target lokal yang dikonfigurasi.</p>
+    {% else %}<div class="empty">Belum ada indikator kesehatan terverifikasi.</div>{% endif %}
   </div>
-  <div class="panel"><div class="panel-title"><div><h2>Aktivitas impor</h2><p>Lima batch terakhir</p></div></div>
-    <div class="timeline">{% for batch in recent_batches %}<div><span></span><p><strong>{{ batch.source.name }}</strong><small>{{ batch.reference|default:"Tanpa referensi" }} · {{ batch.total_records }} data</small></p><time>{{ batch.created_at|timesince }} lalu</time></div>{% empty %}<p class="empty">Belum ada aktivitas.</p>{% endfor %}</div>
+  <div class="panel"><div class="panel-title"><div><h2>Penyakit terbanyak</h2><p>Lima penyakit dengan jumlah pasien tertinggi pada data terbaru.</p></div></div>
+    {% if health_summary.top_diseases %}<ol class="disease-ranking">{% for disease in health_summary.top_diseases %}<li><div><strong>{{ disease.name }}</strong><small>{{ disease.icd10_code }} · {{ disease.installation }}</small></div><span>{{ disease.patient_count }} kasus</span></li>{% endfor %}</ol>{% else %}<div class="empty">Belum ada data penyakit terverifikasi.</div>{% endif %}
   </div>
 </section>
+
+<p class="analytics-source">Acuan dipilih secara dinamis berdasarkan kebijakan dan masa berlaku yang dikonfigurasi administrator. Interpretasi dashboard merupakan sinyal awal dan tidak menggantikan telaah klinis.</p>
 {% endblock %}

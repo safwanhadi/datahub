@@ -69,6 +69,7 @@ urlpatterns = [
     ),
     path('accounts/', include('myaccount.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('access-api/', include('api_access.urls')),
     path('', include('verification.urls')),
 ]
 

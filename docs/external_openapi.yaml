@@ -79,31 +79,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExternalIndicatorEnvelope'
           description: ''
-  /api/external/v1/records/{record_type}/:
-    get:
-      operationId: records_retrieve
-      parameters:
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: Maksimal 500
-      - in: path
-        name: record_type
-        schema:
-          type: string
-        required: true
-      tags:
-      - Eksternal - Data Terverifikasi
-      security:
-      - SimaduBearerAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExternalRecordEnvelope'
-          description: ''
 components:
   schemas:
     ExternalHealthIndicatorEnvelope:
@@ -202,43 +177,6 @@ components:
       - periode
       - tanggal_akhir
       - tanggal_awal
-    ExternalRecordEnvelope:
-      type: object
-      properties:
-        record_type:
-          type: string
-        count:
-          type: integer
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExternalVerifiedRecord'
-      required:
-      - count
-      - record_type
-      - results
-    ExternalVerifiedRecord:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        source_key:
-          type: string
-        data: {}
-        verified_at:
-          type: string
-          format: date-time
-          nullable: true
-        updated_at:
-          type: string
-          format: date-time
-      required:
-      - data
-      - id
-      - source_key
-      - updated_at
-      - verified_at
   securitySchemes:
     SimaduBearerAuth:
       type: oauth2

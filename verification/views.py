@@ -1,107 +1,90 @@
 import json
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, permission_required
-from django.core.paginator import Paginator
-from django.db.models import Count
+from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
-from .forms import ImportForm, IndicatorPeriodForm, InpatientIndicatorVerificationForm, MonthlyHealthVerificationForm, VerificationForm
-from .models import ImportBatch, InpatientIndicatorSource, MonthlyHealthIndicatorSource, StagedRecord, VerifiedInpatientIndicator, VerifiedRecord
+from .forms import IndicatorPeriodForm, InpatientIndicatorStandardForm, InpatientIndicatorVerificationForm, MonthlyHealthVerificationForm
+from .analytics import analyze_inpatient_record, get_applicable_standards
+from .models import InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
 from .oauth import OAuthServerUnavailable
-from .services import begin_verification, fetch_inpatient_indicator, fetch_monthly_health_indicators, import_records, save_inpatient_verification, save_monthly_health_verification, save_verification
+from .services import fetch_inpatient_indicator, fetch_monthly_health_indicators, save_inpatient_verification, save_monthly_health_verification
 
 
 @login_required
 def dashboard(request):
-    counts = {
-        row["status"]: row["total"]
-        for row in StagedRecord.objects.values("status").annotate(total=Count("id"))
-    }
+    approved_inpatient = VerifiedInpatientIndicator.objects.filter(
+        status=VerifiedInpatientIndicator.Status.APPROVED
+    ).select_related("source", "verified_by")
+    latest_inpatient = approved_inpatient.first()
+    approved_health = VerifiedMonthlyHealthIndicator.objects.filter(
+        status=VerifiedMonthlyHealthIndicator.Status.APPROVED
+    ).select_related("source", "verified_by").prefetch_related(
+        "visit_rows", "top_disease_rows", "tourist_visit_rows", "disease_group_rows"
+    )
+    latest_health = approved_health.first()
+    health_summary = None
+    if latest_health:
+        payload = latest_health.to_payload()
+        visits = payload.get("visits", [])
+        health_summary = {
+            "record": latest_health,
+            "total_visits": sum(row.get("count", 0) for row in visits),
+            "outpatient": sum(row.get("count", 0) for row in visits if row.get("installation") == "outpatient"),
+            "inpatient": sum(row.get("count", 0) for row in visits if row.get("installation") == "inpatient"),
+            "emergency": sum(row.get("count", 0) for row in visits if row.get("installation") == "emergency"),
+            "top_diseases": sorted(payload.get("top_diseases", []), key=lambda row: row.get("patient_count", 0), reverse=True)[:5],
+        }
+    indicator_analysis = analyze_inpatient_record(
+        latest_inpatient, get_applicable_standards(latest_inpatient.period)
+    ) if latest_inpatient else []
     context = {
-        "counts": counts,
-        "recent_batches": ImportBatch.objects.select_related("source")[:5],
-        "recent_records": StagedRecord.objects.select_related("batch__source")[:8],
+        "inpatient_records": InpatientIndicatorSource.objects.select_related("verification")[:5],
+        "health_records": MonthlyHealthIndicatorSource.objects.select_related("verification")[:5],
+        "inpatient_total": InpatientIndicatorSource.objects.count(),
+        "inpatient_approved": InpatientIndicatorSource.objects.filter(verification__status="approved").count(),
+        "health_total": MonthlyHealthIndicatorSource.objects.count(),
+        "health_approved": MonthlyHealthIndicatorSource.objects.filter(verification__status="approved").count(),
+        "latest_inpatient": latest_inpatient,
+        "indicator_analysis": indicator_analysis,
+        "indicator_ideal": sum(item["level"] == "ideal" for item in indicator_analysis),
+        "indicator_attention": sum(item["level"] != "ideal" for item in indicator_analysis),
+        "inpatient_trend": approved_inpatient[:6],
+        "health_summary": health_summary,
     }
     return render(request, "verification/dashboard.html", context)
 
 
-@login_required
-def record_list(request):
-    records = StagedRecord.objects.select_related("batch__source", "verified_record")
-    status = request.GET.get("status", "")
-    record_type = request.GET.get("type", "")
-    if status:
-        records = records.filter(status=status)
-    if record_type:
-        records = records.filter(record_type=record_type)
-    page = Paginator(records, 25).get_page(request.GET.get("page"))
-    return render(
-        request,
-        "verification/record_list.html",
-        {
-            "page": page,
-            "selected_status": status,
-            "selected_type": record_type,
-            "record_types": StagedRecord.objects.values_list(
-                "record_type", flat=True
-            ).distinct(),
-            "statuses": StagedRecord.Status.choices,
-        },
+def _is_datahub_admin(user):
+    return user.is_authenticated and (
+        user.is_superuser or user.groups.filter(name="Administrator DataHub").exists()
     )
 
 
-@login_required
-@permission_required("verification.add_importbatch", raise_exception=True)
-def import_data(request):
-    form = ImportForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        batch = import_records(
-            source=form.cleaned_data["source"],
-            reference=form.cleaned_data["reference"],
-            record_type=form.cleaned_data["record_type"],
-            rows=form.cleaned_data["data"],
-            user=request.user,
-        )
-        messages.success(request, f"{batch.total_records} data berhasil ditampung.")
-        return redirect("verification:records")
-    return render(request, "verification/import.html", {"form": form})
+datahub_admin_required = user_passes_test(_is_datahub_admin, login_url="login")
 
 
-@login_required
-@permission_required("verification.change_verifiedrecord", raise_exception=True)
-@require_http_methods(["GET", "POST"])
-def verify_record(request, pk):
-    staged = get_object_or_404(StagedRecord, pk=pk)
-    verified = begin_verification(staged, request.user)
-    form = VerificationForm(request.POST or None, instance=verified)
+@datahub_admin_required
+def indicator_standard_list(request):
+    standards = InpatientIndicatorStandard.objects.select_related("updated_by")
+    return render(request, "verification/standard_list.html", {"standards": standards})
+
+
+@datahub_admin_required
+@transaction.atomic
+def indicator_standard_edit(request, pk=None):
+    standard = get_object_or_404(InpatientIndicatorStandard, pk=pk) if pk else InpatientIndicatorStandard()
+    form = InpatientIndicatorStandardForm(request.POST or None, instance=standard)
     if request.method == "POST" and form.is_valid():
-        action = request.POST.get("action", "save")
-        approve = action == "approve"
-        if approve and not request.user.has_perm("verification.approve_verifiedrecord"):
-            messages.error(request, "Anda tidak memiliki izin untuk menyetujui data.")
-            return redirect("verification:records")
-        save_verification(
-            verified=verified,
-            data=form.cleaned_data["verified_data_text"],
-            notes=form.cleaned_data["verification_notes"],
-            user=request.user,
-            approve=approve,
-        )
-        messages.success(
-            request,
-            "Data disetujui dan siap dipublikasikan."
-            if action == "approve"
-            else "Draf verifikasi tersimpan.",
-        )
-        return redirect("verification:records")
-    return render(
-        request,
-        "verification/verify.html",
-        {"staged": staged, "verified": verified, "form": form},
-    )
+        standard = form.save(commit=False)
+        standard.updated_by = request.user
+        standard.save()
+        messages.success(request, "Standar indikator berhasil disimpan dan langsung digunakan sesuai masa berlakunya.")
+        return redirect("verification:standard-list")
+    return render(request, "verification/standard_form.html", {"form": form, "standard": standard})
 
 
 @login_required

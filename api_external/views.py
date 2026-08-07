@@ -7,10 +7,10 @@ from api_access.mixins import ExternalApiAuditMixin
 from api_access.permissions import HasExternalApiGrant
 from api_access.throttling import ExternalClientRateThrottle
 from verification.health_metadata import HEALTH_INDICATORS, indicator_payload
-from verification.models import VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedRecord
+from verification.models import VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
 from verification.views import INDICATOR_META
 
-from .serializers import ExternalHealthIndicatorEnvelopeSerializer, ExternalIndicatorEnvelopeSerializer, ExternalRecordEnvelopeSerializer
+from .serializers import ExternalHealthIndicatorEnvelopeSerializer, ExternalIndicatorEnvelopeSerializer
 
 
 def _period_fields(source):
@@ -76,37 +76,6 @@ class ExternalIndicatorList(ExternalApiView):
                 "results": results,
             }
         )
-
-
-class ExternalVerifiedRecordList(ExternalApiView):
-    def get_api_product_code(self):
-        return f"records-{self.kwargs['record_type']}"
-
-    @extend_schema(
-        tags=["Eksternal - Data Terverifikasi"],
-        parameters=[OpenApiParameter("limit", int, description="Maksimal 500")],
-        responses=ExternalRecordEnvelopeSerializer,
-    )
-    def get(self, request, record_type):
-        try:
-            limit = min(max(int(request.query_params.get("limit", 100)), 1), 500)
-        except ValueError:
-            return Response({"detail": "Parameter limit harus berupa angka."}, status=400)
-        records = VerifiedRecord.objects.filter(
-            staged_record__record_type=record_type,
-            status__in=(VerifiedRecord.Status.APPROVED, VerifiedRecord.Status.PUBLISHED),
-        ).select_related("staged_record")[:limit]
-        results = [
-            {
-                "id": item.id,
-                "source_key": item.staged_record.source_key,
-                "data": item.verified_data,
-                "verified_at": item.approved_at,
-                "updated_at": item.updated_at,
-            }
-            for item in records
-        ]
-        return Response({"record_type": record_type, "count": len(results), "results": results})
 
 
 class ExternalHealthIndicatorList(ExternalApiView):

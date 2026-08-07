@@ -5,19 +5,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}SIMRS DataHub{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
-  <link rel="stylesheet" href="{% static 'css/indicators.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260807-2">
+  <link rel="stylesheet" href="{% static 'css/indicators.css' %}?v=20260807-2">
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand"><span class="brand-mark">D</span><div>DataHub<small>SIMRS Verification</small></div></div>
     <nav>
-      <a href="{% url 'verification:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Ringkasan</a>
-      <a href="{% url 'verification:indicators' %}" class="{% if 'indicator' in request.resolver_match.url_name %}active{% endif %}">Indikator Rawat Inap</a>
-      <a href="{% url 'verification:health-indicators' %}">Indikator Kesehatan</a>
-      <a href="{% url 'verification:records' %}" class="{% if request.resolver_match.url_name == 'records' %}active{% endif %}">Antrian Data</a>
-      {% if perms.verification.add_importbatch %}<a href="{% url 'verification:import' %}">Impor SIMRS</a>{% endif %}
-      {% if request.user.is_staff %}<a href="{% url 'admin:index' %}">Administrasi</a>{% endif %}
+      {% with current_url=request.resolver_match.url_name current_namespace=request.resolver_match.namespace %}
+      <a href="{% url 'verification:dashboard' %}" class="{% if current_url == 'dashboard' %}active{% endif %}"{% if current_url == 'dashboard' %} aria-current="page"{% endif %}>Ringkasan</a>
+      <a href="{% url 'verification:indicators' %}" class="{% if current_url == 'indicators' or current_url == 'indicator-sync' or current_url == 'indicator-verify' %}active{% endif %}"{% if current_url == 'indicators' or current_url == 'indicator-sync' or current_url == 'indicator-verify' %} aria-current="page"{% endif %}>Indikator Rawat Inap</a>
+      <a href="{% url 'verification:health-indicators' %}" class="{% if current_url == 'health-indicators' or current_url == 'health-indicator-sync' or current_url == 'health-indicator-verify' %}active{% endif %}"{% if current_url == 'health-indicators' or current_url == 'health-indicator-sync' or current_url == 'health-indicator-verify' %} aria-current="page"{% endif %}>Indikator Kesehatan</a>
+      {% if request.user.is_superuser or perms.verification.change_inpatientindicatorstandard %}<a href="{% url 'verification:standard-list' %}" class="{% if current_url == 'standard-list' or current_url == 'standard-create' or current_url == 'standard-edit' %}active{% endif %}"{% if current_url == 'standard-list' or current_url == 'standard-create' or current_url == 'standard-edit' %} aria-current="page"{% endif %}>Standar Indikator</a>{% endif %}
+      {% if request.user.is_superuser or perms.api_access.change_externalapiclient %}<a href="{% url 'api_access:overview' %}" class="{% if current_namespace == 'api_access' %}active{% endif %}"{% if current_namespace == 'api_access' %} aria-current="page"{% endif %}>Akses API</a>{% endif %}
+      {% if request.user.is_superuser or perms.auth.change_user %}<a href="{% url 'myaccount:user-list' %}" class="{% if current_namespace == 'myaccount' and current_url == 'user-list' or current_namespace == 'myaccount' and current_url == 'user-create' or current_namespace == 'myaccount' and current_url == 'user-edit' %}active{% endif %}"{% if current_namespace == 'myaccount' and current_url == 'user-list' or current_namespace == 'myaccount' and current_url == 'user-create' or current_namespace == 'myaccount' and current_url == 'user-edit' %} aria-current="page"{% endif %}>Akun Pengguna</a>{% endif %}
+      {% if request.user.is_staff %}<a href="{% url 'admin:index' %}" class="{% if current_namespace == 'admin' %}active{% endif %}"{% if current_namespace == 'admin' %} aria-current="page"{% endif %}>Administrasi</a>{% endif %}
+      {% endwith %}
     </nav>
     <div class="sidebar-user">
       <span>{{ request.user.get_full_name|default:request.user.username }}</span>

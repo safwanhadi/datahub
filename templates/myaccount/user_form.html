@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{% if managed_user.pk %}Ubah Pengguna{% else %}Tambah Pengguna{% endif %} — DataHub{% endblock %}
+{% block heading %}{% if managed_user.pk %}Ubah pengguna{% else %}Tambah pengguna{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="management-form">{% csrf_token %}
+  {{ form.non_field_errors }}
+  <section class="panel form-section">
+    <div class="section-heading">
+      <div><h2>Identitas pengguna</h2><p>Informasi dasar untuk mengenali pemilik akun.</p></div>
+    </div>
+    <div class="form-grid">
+      <label>{{ form.username.label }}{{ form.username }}{{ form.username.errors }}</label>
+      <label>{{ form.email.label }}{{ form.email }}{{ form.email.errors }}</label>
+      <label>{{ form.first_name.label }}{{ form.first_name }}{{ form.first_name.errors }}</label>
+      <label>{{ form.last_name.label }}{{ form.last_name }}{{ form.last_name.errors }}</label>
+    </div>
+  </section>
+
+  <section class="panel form-section">
+    <div class="section-heading">
+      <div><h2>Akses dan keamanan</h2><p>Tentukan peran, status akun, dan password lokal bila diperlukan.</p></div>
+    </div>
+    <div class="form-grid">
+      <div class="field-group full-row"><span class="field-label">{{ form.roles.label }}</span>{{ form.roles }}{{ form.roles.errors }}</div>
+      <label class="full-row">{{ form.new_password.label }}{{ form.new_password }}{{ form.new_password.errors }}<small>{{ form.new_password.help_text }}</small></label>
+      <label class="toggle-field full-row">{{ form.is_active }}<span><strong>Akun aktif</strong><small>Pengguna dapat masuk dan mengakses DataHub sesuai perannya.</small></span>{{ form.is_active.errors }}</label>
+    </div>
+    <div class="role-help"><strong>Ringkasan peran</strong><small><b>Pembaca</b> melihat data; <b>Petugas Data</b> mengambil data SIMRS; <b>Verifikator</b> memeriksa dan menyetujui; <b>Administrator DataHub</b> mengelola konfigurasi, akses API, dan pengguna.</small></div>
+  </section>
+
+  <div class="form-actions"><a class="button secondary" href="{% url 'myaccount:user-list' %}">Batal</a><button class="primary" type="submit">{% if managed_user.pk %}Simpan perubahan pengguna{% else %}Buat pengguna{% endif %}</button></div>
+</form>
+{% endblock %}

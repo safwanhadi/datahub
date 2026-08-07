@@ -1,5 +1,0 @@
-{% extends "base.html" %}{% block title %}Impor Data — DataHub{% endblock %}{% block heading %}Impor data SIMRS{% endblock %}
-{% block content %}<div class="panel narrow"><div class="notice">Data yang diimpor akan disimpan sebagai data asli dan tidak dapat diedit. Koreksi dilakukan pada salinan verifikasi.</div>
-<form method="post" class="stack">{% csrf_token %}{{ form.non_field_errors }}
-{% for field in form %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</label>{% endfor %}
-<div class="actions"><a class="button secondary" href="{% url 'verification:records' %}">Batal</a><button class="primary">Simpan ke staging</button></div></form></div>{% endblock %}

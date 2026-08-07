@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{% if standard.pk %}Ubah Standar{% else %}Tambah Standar{% endif %} — DataHub{% endblock %}
+{% block heading %}{% if standard.pk %}Ubah standar indikator{% else %}Tambah standar indikator{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="management-form">{% csrf_token %}{{ form.non_field_errors }}
+  <section class="panel form-section"><div class="section-heading"><div><h2>Identitas kebijakan</h2><p>Tentukan indikator, tingkat kebijakan, dan sumber acuan.</p></div></div><div class="form-grid">
+    <label>{{ form.indicator.label }}{{ form.indicator }}{{ form.indicator.errors }}</label><label>{{ form.policy_level.label }}{{ form.policy_level }}{{ form.policy_level.errors }}</label>
+    <label class="full-row">{{ form.reference_name.label }}{{ form.reference_name }}{{ form.reference_name.errors }}</label><label class="full-row">{{ form.reference_url.label }}{{ form.reference_url }}{{ form.reference_url.errors }}</label>
+  </div></section>
+  <section class="panel form-section"><div class="section-heading"><div><h2>Ambang analitik</h2><p>Batas kosong berarti sisi tersebut tidak dibatasi.</p></div></div><div class="form-grid">
+    <label>{{ form.minimum_value.label }}{{ form.minimum_value }}{{ form.minimum_value.errors }}</label><label>{{ form.maximum_value.label }}{{ form.maximum_value }}{{ form.maximum_value.errors }}</label>
+    <label>{{ form.unit.label }}{{ form.unit }}{{ form.unit.errors }}</label><label>{{ form.period_basis.label }}{{ form.period_basis }}{{ form.period_basis.errors }}</label>
+    <label class="toggle-field full-row">{{ form.maximum_exclusive }}<span><strong>Batas atas eksklusif</strong><small>Aktifkan bila nilai harus lebih kecil dari batas, misalnya NDR &lt;25.</small></span>{{ form.maximum_exclusive.errors }}</label>
+  </div></section>
+  <section class="panel form-section"><div class="section-heading"><div><h2>Masa berlaku</h2><p>Standar lama tetap tersimpan untuk analisis periode sebelumnya.</p></div></div><div class="form-grid">
+    <label>{{ form.effective_from.label }}{{ form.effective_from }}{{ form.effective_from.errors }}</label><label>{{ form.effective_until.label }}{{ form.effective_until }}{{ form.effective_until.errors }}</label>
+    <label class="full-row">{{ form.notes.label }}{{ form.notes }}{{ form.notes.errors }}</label><label class="toggle-field full-row">{{ form.is_active }}<span><strong>Standar aktif</strong><small>Standar dapat dipilih dashboard sesuai periode berlakunya.</small></span>{{ form.is_active.errors }}</label>
+  </div></section>
+  <div class="form-actions"><a class="button secondary" href="{% url 'verification:standard-list' %}">Batal</a><button class="primary" type="submit">Simpan standar indikator</button></div>
+</form>
+{% endblock %}

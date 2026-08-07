@@ -2,6 +2,7 @@ from datetime import date
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -124,3 +125,51 @@ class SeparatedApiTests(TestCase):
     def test_legacy_api_v1_routes_are_removed(self):
         self.assertEqual(self.client.get("/api/v1/indikator/bor/").status_code, 404)
         self.assertEqual(self.client.get("/api/v1/data/kunjungan/").status_code, 404)
+
+
+class ApiAccessManagementTests(TestCase):
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user("datahub-admin", password="secret")
+        self.admin.groups.add(Group.objects.get(name="Administrator DataHub"))
+        self.regular = get_user_model().objects.create_user("regular", password="secret")
+
+    def test_only_datahub_admin_can_open_access_management(self):
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get(reverse("api_access:overview")).status_code, 302)
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(reverse("api_access:overview")).status_code, 200)
+
+    def test_admin_can_create_client_with_product_grant(self):
+        self.client.force_login(self.admin)
+        product = ApiProduct.objects.get(code="indicator-bor")
+        response = self.client.post(reverse("api_access:client-create"), {
+            "name": "Dashboard Mitra", "client_id": "dashboard-mitra",
+            "requests_per_minute": 90, "is_active": "on",
+            "grants-TOTAL_FORMS": "1", "grants-INITIAL_FORMS": "0",
+            "grants-MIN_NUM_FORMS": "0", "grants-MAX_NUM_FORMS": "1000",
+            "grants-0-product": str(product.pk), "grants-0-is_active": "on",
+            "grants-0-expires_at": "",
+        })
+        self.assertRedirects(response, reverse("api_access:overview"))
+        client = ExternalApiClient.objects.get(client_id="dashboard-mitra")
+        self.assertTrue(client.grants.filter(product=product, is_active=True).exists())
+
+    def test_admin_can_save_multiple_grants_in_one_submission(self):
+        self.client.force_login(self.admin)
+        products = list(ApiProduct.objects.order_by("pk")[:2])
+        response = self.client.post(reverse("api_access:client-create"), {
+            "name": "Integrasi Mitra", "client_id": "integrasi-mitra",
+            "requests_per_minute": 120, "is_active": "on",
+            "grants-TOTAL_FORMS": "2", "grants-INITIAL_FORMS": "0",
+            "grants-MIN_NUM_FORMS": "0", "grants-MAX_NUM_FORMS": "1000",
+            "grants-0-product": str(products[0].pk), "grants-0-is_active": "on",
+            "grants-0-expires_at": "",
+            "grants-1-product": str(products[1].pk), "grants-1-is_active": "on",
+            "grants-1-expires_at": "",
+        })
+        self.assertRedirects(response, reverse("api_access:overview"))
+        client = ExternalApiClient.objects.get(client_id="integrasi-mitra")
+        self.assertSetEqual(
+            set(client.grants.values_list("product_id", flat=True)),
+            {products[0].pk, products[1].pk},
+        )

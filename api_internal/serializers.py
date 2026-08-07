@@ -19,26 +19,9 @@ class InternalIndicatorSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField()
 
 
-class InternalVerifiedRecordSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    record_type = serializers.CharField()
-    source_key = serializers.CharField()
-    status = serializers.CharField()
-    data = serializers.JSONField()
-    verified_by = serializers.CharField(allow_null=True)
-    approved_at = serializers.DateTimeField(allow_null=True)
-    updated_at = serializers.DateTimeField()
-
-
 class InternalIndicatorEnvelopeSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     results = InternalIndicatorSerializer(many=True)
-
-
-class InternalRecordEnvelopeSerializer(serializers.Serializer):
-    record_type = serializers.CharField()
-    count = serializers.IntegerField()
-    results = InternalVerifiedRecordSerializer(many=True)
 
 
 class InternalMonthlyHealthSerializer(serializers.Serializer):

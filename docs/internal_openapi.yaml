@@ -54,31 +54,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/InternalIndicatorEnvelope'
           description: ''
-  /api/internal/v1/records/{record_type}/:
-    get:
-      operationId: records_retrieve
-      parameters:
-      - in: query
-        name: limit
-        schema:
-          type: integer
-        description: Maksimal 500
-      - in: path
-        name: record_type
-        schema:
-          type: string
-        required: true
-      tags:
-      - Internal - Data Terverifikasi
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InternalRecordEnvelope'
-          description: ''
 components:
   schemas:
     InternalIndicator:
@@ -212,53 +187,6 @@ components:
       required:
       - count
       - results
-    InternalRecordEnvelope:
-      type: object
-      properties:
-        record_type:
-          type: string
-        count:
-          type: integer
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/InternalVerifiedRecord'
-      required:
-      - count
-      - record_type
-      - results
-    InternalVerifiedRecord:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        record_type:
-          type: string
-        source_key:
-          type: string
-        status:
-          type: string
-        data: {}
-        verified_by:
-          type: string
-          nullable: true
-        approved_at:
-          type: string
-          format: date-time
-          nullable: true
-        updated_at:
-          type: string
-          format: date-time
-      required:
-      - approved_at
-      - data
-      - id
-      - record_type
-      - source_key
-      - status
-      - updated_at
-      - verified_by
   securitySchemes:
     cookieAuth:
       type: apiKey

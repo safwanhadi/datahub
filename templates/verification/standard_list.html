@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Standar Indikator — DataHub{% endblock %}
+{% block heading %}Standar indikator{% endblock %}
+{% block content %}
+<div class="notice">Dashboard memilih standar berdasarkan periode hasil verifikasi. Jika kebijakan internal dan nasional sama-sama berlaku, kebijakan internal diprioritaskan.</div>
+<section class="panel">
+  <div class="panel-title page-toolbar"><div><h2>Daftar standar analitik</h2><p>Kelola ambang, sumber kebijakan, dan masa berlaku tanpa mengubah kode aplikasi.</p></div><a class="button primary" href="{% url 'verification:standard-create' %}">+ Tambah standar</a></div>
+  <div class="table-wrap"><table><thead><tr><th>Indikator</th><th>Kebijakan</th><th>Rentang standar</th><th>Periode</th><th>Berlaku</th><th>Status</th><th class="right">Tindakan</th></tr></thead><tbody>
+  {% for item in standards %}<tr><td><strong>{{ item.get_indicator_display }}</strong><small>{{ item.reference_name }}</small></td><td><span class="badge {% if item.policy_level == 'internal' %}in_review{% else %}neutral{% endif %}">{{ item.get_policy_level_display }}</span></td><td><strong>{% if item.minimum_value != None %}{{ item.minimum_value }}{% else %}—{% endif %} {% if item.minimum_value != None and item.maximum_value != None %}s.d.{% elif item.maximum_value != None %}{% if item.maximum_exclusive %}&lt;{% else %}≤{% endif %}{% endif %} {% if item.maximum_value != None %}{{ item.maximum_value }}{% endif %} {{ item.unit }}</strong></td><td>{{ item.get_period_basis_display }}</td><td>{{ item.effective_from|date:"d M Y" }}<small>s.d. {{ item.effective_until|date:"d M Y"|default:"seterusnya" }}</small></td><td><span class="badge {% if item.is_active %}approved{% else %}rejected{% endif %}">{% if item.is_active %}Aktif{% else %}Nonaktif{% endif %}</span></td><td class="right"><a class="button secondary small" href="{% url 'verification:standard-edit' item.pk %}">Ubah standar</a></td></tr>
+  {% empty %}<tr><td colspan="7" class="empty">Belum ada standar indikator.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

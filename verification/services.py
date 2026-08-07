@@ -11,21 +11,17 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import (
-    ImportBatch,
     SimrsApiEndpoint,
     InpatientIndicatorAudit,
     InpatientIndicatorSource,
     MonthlyHealthIndicatorAudit,
     MonthlyHealthIndicatorSource,
-    StagedRecord,
-    VerificationAudit,
     VerifiedInpatientIndicator,
     VerifiedMonthlyHealthIndicator,
     VerifiedHealthVisitRow,
     VerifiedTopDiseaseRow,
     VerifiedTouristVisitRow,
     VerifiedDiseaseGroupRow,
-    VerifiedRecord,
 )
 from .oauth import get_simrs_access_token
 from .health_metadata import normalize_health_payload
@@ -41,73 +37,6 @@ def resolve_simrs_endpoint(code, fallback_url=""):
     if fallback_url:
         return fallback_url, 30
     raise ImproperlyConfigured(f"Endpoint SIMRS {code} belum dikonfigurasi.")
-
-
-@transaction.atomic
-def import_records(*, source, reference, record_type, rows, user=None):
-    batch = ImportBatch.objects.create(
-        source=source, reference=reference, imported_by=user
-    )
-    records = [
-        StagedRecord(
-            batch=batch,
-            source_key=str(row["source_key"]),
-            record_type=record_type,
-            raw_data=row,
-        )
-        for row in rows
-    ]
-    # save() menghitung checksum; bulk_create tidak memanggil save().
-    for record in records:
-        record.save()
-    batch.status = ImportBatch.Status.COMPLETED
-    batch.total_records = len(records)
-    batch.completed_at = timezone.now()
-    batch.save(update_fields=("status", "total_records", "completed_at"))
-    return batch
-
-
-@transaction.atomic
-def begin_verification(staged, user):
-    verified, created = VerifiedRecord.objects.get_or_create(
-        staged_record=staged,
-        defaults={"verified_data": staged.raw_data, "verified_by": user},
-    )
-    if created:
-        staged.status = StagedRecord.Status.IN_REVIEW
-        staged.save(update_fields=("status",))
-        VerificationAudit.objects.create(
-            record=verified,
-            action="copied_from_staging",
-            after_data=verified.verified_data,
-            actor=user,
-        )
-    return verified
-
-
-@transaction.atomic
-def save_verification(*, verified, data, notes, user, approve=False):
-    before = verified.verified_data
-    verified.verified_data = data
-    verified.verification_notes = notes
-    verified.verified_by = user
-    action = "updated"
-    if approve:
-        verified.status = VerifiedRecord.Status.APPROVED
-        verified.approved_at = timezone.now()
-        verified.staged_record.status = StagedRecord.Status.VERIFIED
-        verified.staged_record.save(update_fields=("status",))
-        action = "approved"
-    verified.save()
-    VerificationAudit.objects.create(
-        record=verified,
-        action=action,
-        before_data=before,
-        after_data=data,
-        notes=notes,
-        actor=user,
-    )
-    return verified
 
 
 @transaction.atomic
