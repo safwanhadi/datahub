@@ -25,7 +25,7 @@
       <label class="full-row">{{ form.new_password.label }}{{ form.new_password }}{{ form.new_password.errors }}<small>{{ form.new_password.help_text }}</small></label>
       <label class="toggle-field full-row">{{ form.is_active }}<span><strong>Akun aktif</strong><small>Pengguna dapat masuk dan mengakses DataHub sesuai perannya.</small></span>{{ form.is_active.errors }}</label>
     </div>
-    <div class="role-help"><strong>Ringkasan peran</strong><small><b>Pembaca</b> melihat data; <b>Petugas Data</b> mengambil data SIMRS; <b>Verifikator</b> memeriksa dan menyetujui; <b>Administrator DataHub</b> mengelola konfigurasi, akses API, dan pengguna.</small></div>
+    <div class="role-help"><strong>Pembagian tanggung jawab</strong><small><b>Pembaca</b>: pimpinan/pengguna analitik, hanya melihat dashboard. <b>Petugas Data (SIMRS)</b>: mengatur endpoint dan mengambil data dari SIMRS. <b>Verifikator (Rekam Medis/RM)</b>: memeriksa, mengoreksi, dan menyetujui data. <b>Administrator DataHub</b>: mengelola seluruh konfigurasi, akses API, standar, dan pengguna.</small></div>
   </section>
 
   <div class="form-actions"><a class="button secondary" href="{% url 'myaccount:user-list' %}">Batal</a><button class="primary" type="submit">{% if managed_user.pk %}Simpan perubahan pengguna{% else %}Buat pengguna{% endif %}</button></div>

@@ -184,6 +184,41 @@ Catatan:
 DataHub menghitung ulang enam indikator dari data_dasar. Nilai dalam objek
 indikator disimpan sebagai pembanding hasil perhitungan SIMRS.
 
+Endpoint indikator per ruang:
+GET /api/data_indikator_per_bangsal.php?tgl_awal=2026-07-01&tgl_akhir=2026-07-31
+
+Respons minimal:
+{
+  "data": [
+    {
+      "kd_bangsal": "ANAK",
+      "bangsal": "Ruang Anak",
+      "bed": 12,
+      "hp": 250,
+      "d": 45,
+      "mati": 1,
+      "mati_48": 0,
+      "alos": 5.56,
+      "bor": 67.20,
+      "bto": 3.75,
+      "toi": 2.71,
+      "gdr": 22.22,
+      "ndr": 0,
+      "is_khusus": false
+    }
+  ]
+}
+
+DataHub menyimpan snapshot dan menghitung ulang indikator setiap ruang. Rincian
+ruang hanya tersedia untuk verifikasi dan API internal. API eksternal tetap
+menerbitkan indikator total rumah sakit.
+
+Kebijakan total rumah sakit:
+- Seluruh ruang/instalasi tetap wajib dikirim dan dihitung masing-masing.
+- ICU, NICU, PICU, Perina, dan VK dikecualikan dari indikator total rumah sakit.
+- Ruang lain, termasuk HCU, tetap masuk total kecuali keputusan
+  manajemen mengubah konfigurasi INPATIENT_TOTAL_EXCLUDED_ROOM_KEYWORDS.
+
 
 C. KUNJUNGAN RAWAT JALAN, RAWAT INAP, DAN IGD
 ============================================================
@@ -347,8 +382,8 @@ Contoh respons:
   "results": [
     {"category": "international", "origin": "Australia", "count": 18},
     {"category": "international", "origin": "Malaysia", "count": 7},
-    {"category": "domestic", "origin": "Bali", "count": 31},
-    {"category": "domestic", "origin": "Jawa Timur", "count": 24}
+    {"category": "domestic", "origin_code": "51", "origin": "Bali", "count": 31},
+    {"category": "domestic", "origin_code": "35", "origin": "Jawa Timur", "count": 24}
   ]
 }
 
@@ -366,7 +401,13 @@ origin
   Wajib : ya
   Isi   :
     - Nama negara jika category adalah international.
-    - Nama provinsi jika category adalah domestic.
+    - Nama wilayah asal jika category adalah domestic.
+
+origin_code
+  Tipe  : string atau null
+  Wajib : belum, tetapi direkomendasikan untuk data domestik
+  Isi   : kode wilayah resmi. Selama kode belum tersedia, DataHub melakukan
+          normalisasi berdasarkan master nama dan alias tanpa mengubah data asli.
 
 count
   Tipe  : integer, minimal 0

@@ -18,6 +18,30 @@ HEALTH_INDICATORS = {
     "uronephrology-patients": {"name": "Pasien Uronefrologi", "unit": "orang"},
 }
 
+# Unit kerja verifikator. Empat indikator penyakit prioritas dinilai sebagai
+# satu kesatuan KJSU, tetapi kontrak API publiknya tetap berupa empat endpoint.
+HEALTH_VERIFICATION_GROUPS = {
+    "outpatient-visits": HEALTH_INDICATORS["outpatient-visits"],
+    "inpatient-visits": HEALTH_INDICATORS["inpatient-visits"],
+    "emergency-visits": HEALTH_INDICATORS["emergency-visits"],
+    "top-diseases": HEALTH_INDICATORS["top-diseases"],
+    "tourist-visits": HEALTH_INDICATORS["tourist-visits"],
+    "kjsu-evaluation": {
+        "name": "Evaluasi KJSU",
+        "unit": "orang",
+        "description": "Kanker, Jantung, Stroke, dan Uronefrologi",
+    },
+}
+
+
+def verification_group_for_indicator(code):
+    if code in {
+        "cancer-patients", "heart-patients", "stroke-patients",
+        "uronephrology-patients",
+    }:
+        return "kjsu-evaluation"
+    return code
+
 def _count(value, path):
     if isinstance(value, bool):
         raise ValidationError(f"{path} harus berupa bilangan bulat non-negatif.")

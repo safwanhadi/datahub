@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from verification.models import InpatientIndicatorSource, MonthlyHealthIndicatorSource, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
+from verification.models import HealthIndicatorVerification, InpatientIndicatorSource, MonthlyHealthIndicatorSource, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
 
 from .models import ApiAccessLog, ApiProduct, ExternalApiClient, ExternalApiGrant
 
@@ -64,14 +64,30 @@ class SeparatedApiTests(TestCase):
             period=date(2026, 8, 1), hospital_code="RS-M", hospital_name="RS Mandalika",
             source_data={"hospital": {"code": "RS-M", "name": "RS Mandalika"}, "visits": [{"installation": "outpatient", "payment_status": "bpjs", "count": 25}]}, raw_response={},
         )
-        VerifiedMonthlyHealthIndicator.objects.create(
+        health_record = VerifiedMonthlyHealthIndicator.objects.create(
             source=health_source, period=health_source.period, verified_data=health_source.source_data,
             status=VerifiedMonthlyHealthIndicator.Status.APPROVED, verified_at=timezone.now(),
+        )
+        HealthIndicatorVerification.objects.create(
+            record=health_record, indicator_code="outpatient-visits",
+            status=HealthIndicatorVerification.Status.APPROVED, verified_at=timezone.now(),
+        )
+        HealthIndicatorVerification.objects.create(
+            record=health_record, indicator_code="kjsu-evaluation",
+            status=HealthIndicatorVerification.Status.APPROVED, verified_at=timezone.now(),
         )
         ExternalApiGrant.objects.create(
             client=self.external_client,
             product=ApiProduct.objects.get(code="health-outpatient-visits"),
         )
+        ExternalApiGrant.objects.create(
+            client=self.external_client,
+            product=ApiProduct.objects.get(code="health-emergency-visits"),
+        )
+        for code in ("health-cancer-patients", "health-heart-patients"):
+            ExternalApiGrant.objects.create(
+                client=self.external_client, product=ApiProduct.objects.get(code=code)
+            )
 
     def test_internal_api_requires_session_and_exposes_all_indicators(self):
         url = reverse("api_internal:inpatient-indicators")
@@ -100,6 +116,7 @@ class SeparatedApiTests(TestCase):
 
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(allowed.json()["results"][0]["nilai"], 77.42)
+        self.assertNotIn("ruangan", allowed.json())
         self.assertEqual(denied.status_code, 403)
         self.assertEqual(ApiAccessLog.objects.count(), 2)
 
@@ -109,6 +126,16 @@ class SeparatedApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("/api/external/v1/indicators/{indicator}/", body)
         self.assertNotIn("verified_by", body)
+
+    def test_external_schema_accepts_bearer_token_for_swagger_testing(self):
+        response = self.client.get(reverse("external-schema"))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("type: http", body)
+        self.assertIn("scheme: bearer", body)
+        self.assertIn("bearerFormat: Opaque token SIMADU", body)
+        self.assertNotIn("clientCredentials", body)
 
     @patch(
         "api_access.authentication.introspect_raw_access_token",
@@ -121,6 +148,32 @@ class SeparatedApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["data"]["total"], 25)
+
+    @patch(
+        "api_access.authentication.introspect_raw_access_token",
+        return_value={"active": True, "client_id": "external-dashboard", "scope": "read:dash"},
+    )
+    def test_approving_one_health_indicator_does_not_publish_another(self, introspect_mock):
+        response = self.client.get(
+            reverse("api_external:health-indicator", args=["emergency-visits"]),
+            HTTP_AUTHORIZATION="Bearer opaque-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 0)
+
+    @patch(
+        "api_access.authentication.introspect_raw_access_token",
+        return_value={"active": True, "client_id": "external-dashboard", "scope": "read:dash"},
+    )
+    def test_kjsu_approval_publishes_all_kjsu_api_indicators(self, introspect_mock):
+        for code in ("cancer-patients", "heart-patients"):
+            response = self.client.get(
+                reverse("api_external:health-indicator", args=[code]),
+                HTTP_AUTHORIZATION="Bearer opaque-token",
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["count"], 1)
 
     def test_legacy_api_v1_routes_are_removed(self):
         self.assertEqual(self.client.get("/api/v1/indikator/bor/").status_code, 404)

@@ -28,7 +28,7 @@ class InternalIndicatorList(APIView):
         responses=InternalIndicatorEnvelopeSerializer,
     )
     def get(self, request):
-        records = VerifiedInpatientIndicator.objects.select_related("verified_by", "source")
+        records = VerifiedInpatientIndicator.objects.select_related("verified_by", "source").prefetch_related("room_indicators__source_room")
         if request.query_params.get("tahun"):
             records = records.filter(period__year=request.query_params["tahun"])
         if request.query_params.get("bulan"):
@@ -50,6 +50,19 @@ class InternalIndicatorList(APIView):
                 "verified_by": item.verified_by.get_username() if item.verified_by else None,
                 "verified_at": item.verified_at,
                 "updated_at": item.updated_at,
+                "ruangan": [
+                    {
+                        "kode_ruang": room.source_room.room_code,
+                        "nama_ruang": room.source_room.room_name,
+                        "ruang_khusus": room.source_room.is_special,
+                        "jumlah_bed": room.source_room.beds,
+                        "hari_perawatan": room.source_room.care_days,
+                        "pasien_keluar": room.source_room.discharged_patients,
+                        "alos": room.alos, "bor": room.bor, "bto": room.bto,
+                        "toi": room.toi, "gdr": room.gdr, "ndr": room.ndr,
+                    }
+                    for room in item.room_indicators.all()
+                ],
             }
             for item in records
         ]

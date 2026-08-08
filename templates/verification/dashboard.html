@@ -4,8 +4,14 @@
 {% block content %}
 <section class="analytics-hero">
   <div><span class="eyebrow">DATA SIAP KONSUMSI</span><h2>Ringkasan mutu pelayanan rumah sakit</h2><p>Analisis hanya menggunakan data yang telah disetujui verifikator sebelum diteruskan ke API internal maupun eksternal.</p></div>
-  {% if latest_inpatient %}<div class="period-chip"><small>Periode analisis</small><strong>{{ latest_inpatient.source.period_start|date:"d M Y" }} – {{ latest_inpatient.source.period_end|date:"d M Y" }}</strong><span>Diverifikasi {{ latest_inpatient.verified_at|date:"d M Y H:i" }}</span></div>{% endif %}
+  <div class="period-chip"><small>Periode ringkasan</small><strong>{{ period_label }}</strong><span>{{ period_start|date:"d M Y" }} – {{ period_end|date:"d M Y" }}</span></div>
 </section>
+
+<form method="get" class="dashboard-period-filter panel">
+  <label><span>Jenis ringkasan</span><select name="period"><option value="monthly" {% if period_mode == "monthly" %}selected{% endif %}>Bulanan</option><option value="quarterly" {% if period_mode == "quarterly" %}selected{% endif %}>Triwulan</option><option value="semester" {% if period_mode == "semester" %}selected{% endif %}>Semester</option><option value="yearly" {% if period_mode == "yearly" %}selected{% endif %}>Tahunan</option></select></label>
+  <label><span>Bulan acuan</span><input type="month" name="reference" value="{{ period_reference }}"></label>
+  <button class="button primary" type="submit">Tampilkan ringkasan</button>
+</form>
 
 <section class="metrics analytics-metrics">
   <article><span>Periode terverifikasi</span><strong>{{ inpatient_approved }}</strong><small>Data rawat inap siap dianalisis</small></article>
@@ -43,6 +49,20 @@
   <div class="panel"><div class="panel-title"><div><h2>Penyakit terbanyak</h2><p>Lima penyakit dengan jumlah pasien tertinggi pada data terbaru.</p></div></div>
     {% if health_summary.top_diseases %}<ol class="disease-ranking">{% for disease in health_summary.top_diseases %}<li><div><strong>{{ disease.name }}</strong><small>{{ disease.icd10_code }} · {{ disease.installation }}</small></div><span>{{ disease.patient_count }} kasus</span></li>{% endfor %}</ol>{% else %}<div class="empty">Belum ada data penyakit terverifikasi.</div>{% endif %}
   </div>
+</section>
+
+<section class="panel section-gap tourist-dashboard">
+  <div class="panel-title"><div><h2>Kunjungan wisatawan</h2><p>Agregat hasil mapping untuk {{ period_label }}. Pasien domestik dari Kabupaten Lombok Tengah dan wilayah yang belum dikenali tidak masuk hitungan wisatawan.</p></div><a href="{% url 'verification:health-indicators' %}">Buka indikator kesehatan →</a></div>
+  {% if health_summary %}
+  <div class="tourist-metrics tourist-metrics-simple">
+    <div class="published"><span>Wisatawan Nusantara</span><strong>{{ health_summary.wisnus_total }}</strong><small>Domestik dari luar Kabupaten Lombok Tengah</small></div>
+    <div class="published"><span>Wisatawan Mancanegara</span><strong>{{ health_summary.wisman_total }}</strong><small>Seluruh kategori internasional</small></div>
+    <div><span>Total wisatawan</span><strong>{{ health_summary.tourist_published_total }}</strong><small>Wisnus + Wisman</small></div>
+  </div>
+  {% if period_mode != "monthly" %}<div class="table-wrap"><table class="mapping-table tourist-period-table"><thead><tr><th>Bulan</th><th>Wisatawan Nusantara</th><th>Wisatawan Mancanegara</th><th>Total</th></tr></thead><tbody>
+    {% for row in health_summary.tourist_months %}<tr><td><strong>{{ row.period|date:"F Y" }}</strong></td><td>{{ row.wisnus }}</td><td>{{ row.wisman }}</td><td><strong>{{ row.total }}</strong></td></tr>{% endfor %}
+  </tbody><tfoot><tr><th>Total {{ period_label }}</th><th>{{ health_summary.wisnus_total }}</th><th>{{ health_summary.wisman_total }}</th><th>{{ health_summary.tourist_published_total }}</th></tr></tfoot></table></div>{% endif %}
+  {% else %}<div class="empty">Belum ada indikator kesehatan terverifikasi pada {{ period_label }}.</div>{% endif %}
 </section>
 
 <p class="analytics-source">Acuan dipilih secara dinamis berdasarkan kebijakan dan masa berlaku yang dikonfigurasi administrator. Interpretasi dashboard merupakan sinyal awal dan tidak menggantikan telaah klinis.</p>

@@ -179,10 +179,8 @@ components:
       - tanggal_awal
   securitySchemes:
     SimaduBearerAuth:
-      type: oauth2
-      description: Opaque access token yang diterbitkan SIMADU.
-      flows:
-        clientCredentials:
-          tokenUrl: https://simadu.rsmandalika.com/o/token/
-          scopes:
-            read:dash: Membaca API terverifikasi DataHub
+      type: http
+      scheme: bearer
+      bearerFormat: Opaque token SIMADU
+      description: Tempel access_token yang diterbitkan SIMADU. Token dapat diambil
+        melalui Postman menggunakan grant client_credentials.

@@ -26,6 +26,7 @@ class DiseaseRowSerializer(serializers.Serializer):
 
 class TouristRowSerializer(serializers.Serializer):
     category = serializers.ChoiceField(choices=("international", "domestic"))
+    origin_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     origin = serializers.CharField(allow_blank=True)
     count = serializers.IntegerField(min_value=0)
 

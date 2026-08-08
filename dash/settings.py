@@ -185,7 +185,14 @@ SIMADU_SSO_TIMEOUT = int(os.environ.get("SIMADU_SSO_TIMEOUT", "10"))
 
 # PHP merupakan satu-satunya jembatan ke SIMRS; Django tidak membuka koneksi DB SIMRS.
 SIMRS_INDICATOR_API_URL = os.environ.get("SIMRS_INDICATOR_API_URL", "")
-SIMRS_HEALTH_API_URL = os.environ.get("SIMRS_HEALTH_API_URL", "")
+SIMRS_INPATIENT_ROOMS_API_URL = os.environ.get("SIMRS_INPATIENT_ROOMS_API_URL", "")
+INPATIENT_TOTAL_EXCLUDED_ROOM_KEYWORDS = tuple(
+    value.strip().upper()
+    for value in os.environ.get(
+        "INPATIENT_TOTAL_EXCLUDED_ROOM_KEYWORDS", "ICU,NICU,PICU,PERINA,VK"
+    ).split(",")
+    if value.strip()
+)
 SIMRS_MOCK_TOKEN = os.environ.get("SIMRS_MOCK_TOKEN", "mock-simrs-token")
 
 # OAuth opaque SIMADU: DataHub sebagai client saat membaca API PHP/SIMRS.
@@ -207,6 +214,13 @@ SIMADU_INTROSPECTION_CLIENT_SECRET = os.environ.get(
 SIMADU_OAUTH_TIMEOUT = int(os.environ.get("SIMADU_OAUTH_TIMEOUT", "10"))
 SIMADU_INTROSPECTION_CACHE_SECONDS = min(
     int(os.environ.get("SIMADU_INTROSPECTION_CACHE_SECONDS", "30")), 60
+)
+
+# Pasien domestik dari luar wilayah lokal berikut dihitung sebagai Wisnus.
+TOURIST_LOCAL_REGION_CODES = tuple(
+    code.strip()
+    for code in os.environ.get("TOURIST_LOCAL_REGION_CODES", "52.02").split(",")
+    if code.strip()
 )
 
 # Cookie/HTTPS hardening otomatis aktif ketika mode production digunakan.

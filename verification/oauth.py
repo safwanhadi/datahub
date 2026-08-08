@@ -60,7 +60,7 @@ def _post_form(url, form, *, client_id, client_secret, timeout):
 
 
 def get_simrs_access_token():
-    """Ambil opaque access token untuk DataHub → PHP/SIMRS."""
+    """Ambil opaque access token untuk DataHub → SIMRS."""
     cache_key = "oauth:simadu:simrs-machine-token"
     cached = cache.get(cache_key)
     if cached:
