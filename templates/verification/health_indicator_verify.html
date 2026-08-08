@@ -1,30 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Verifikasi Indikator Kesehatan{% endblock %}
-{% block heading %}Verifikasi {{ source.period_start|date:"d M Y" }} – {{ source.period_end|date:"d M Y" }}{% endblock %}
+{% block title %}Verifikasi {{ indicator.name }}{% endblock %}
+{% block heading %}Verifikasi {{ indicator.name }}{% endblock %}
 {% block content %}
-<div class="compare-banner"><span>1. Data diterima</span><b>→</b><span class="active">2. Pemeriksaan pegawai</span><b>→</b><span>3. Siap untuk API</span></div>
-<div class="notice">Periksa nilai pada setiap baris. Pegawai tidak perlu membaca atau mengubah JSON.</div>
+<div class="compare-banner"><span>1. Data diterima</span><b>→</b><span class="active">2. Pemeriksaan {{ indicator.name }}</span><b>→</b><span>3. Siap untuk API</span></div>
+<div class="notice">Periode {{ source.period_start|date:"d M Y" }} – {{ source.period_end|date:"d M Y" }}. Persetujuan ini hanya berlaku untuk <strong>{{ indicator.name }}</strong>{% if indicator.description %}: {{ indicator.description }}{% endif %}.</div>
 <form method="post" class="stack">{% csrf_token %}{{ form.non_field_errors }}
-  <section class="panel"><div class="panel-title"><div><h2>Kunjungan pasien</h2><p>Rawat Jalan, Rawat Inap, dan IGD berdasarkan jenis pembayaran.</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Instalasi</th><th>Pembayaran</th><th>Jumlah kunjungan</th></tr></thead><tbody>
-      {% for row in form.bound_visit_rows %}<tr><td>{{ row.installation }}</td><td>{{ row.payment_status }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Tidak ada data kunjungan.</td></tr>{% endfor %}
-    </tbody></table></div>
-  </section>
-  <section class="panel"><div class="panel-title"><div><h2>10 penyakit terbanyak</h2><p>Diagnosis per instalasi.</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Instalasi</th><th>Kode ICD-10</th><th>Nama penyakit</th><th>Jumlah pasien</th></tr></thead><tbody>
-      {% for row in form.bound_disease_rows %}<tr><td>{{ row.installation }}</td><td>{{ row.code }}{{ row.code.errors }}</td><td>{{ row.name }}{{ row.name.errors }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">Tidak ada data penyakit.</td></tr>{% endfor %}
-    </tbody></table></div>
-  </section>
-  <section class="panel"><div class="panel-title"><div><h2>Kunjungan wisatawan</h2><p>Wisatawan domestik dan internasional berdasarkan asal.</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Kategori</th><th>Asal</th><th>Jumlah</th></tr></thead><tbody>
-      {% for row in form.bound_tourist_rows %}<tr><td>{{ row.category }}</td><td>{{ row.origin }}{{ row.origin.errors }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Tidak ada data wisatawan.</td></tr>{% endfor %}
-    </tbody></table></div>
-  </section>
-  <section class="panel"><div class="panel-title"><div><h2>Jumlah pasien berdasarkan penyakit</h2><p>Kanker, jantung, stroke, dan uronefrologi.</p></div></div>
-    <div class="table-wrap"><table><thead><tr><th>Kelompok</th><th>Rentang ICD-10</th><th>Jumlah pasien</th></tr></thead><tbody>
-      {% for row in form.bound_group_rows %}<tr><td>{{ row.code }}</td><td>{{ row.icd10_range }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% empty %}<tr><td colspan="3" class="empty">Tidak ada data kelompok penyakit.</td></tr>{% endfor %}
-    </tbody></table></div>
-  </section>
-  <section class="panel notes"><label>{{ form.notes.label }}{{ form.notes }}{{ form.notes.errors }}</label><div class="actions"><a class="button secondary" href="{% url 'verification:health-indicators' %}">Kembali</a><button name="action" value="save" class="secondary">Simpan draf</button>{% if perms.verification.approve_verifiedmonthlyhealthindicator %}<button name="action" value="approve" class="primary">Setujui dan publikasikan</button>{% endif %}</div></section>
+{% if form.bound_visit_rows %}<section class="panel"><div class="panel-title"><div><h2>{{ indicator.name }}</h2><p>Rincian berdasarkan jenis pembayaran.</p></div></div><div class="table-wrap"><table><thead><tr><th>Instalasi</th><th>Pembayaran</th><th>Jumlah kunjungan</th></tr></thead><tbody>{% for row in form.bound_visit_rows %}<tr><td>{{ row.installation }}</td><td>{{ row.payment_status }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% if form.bound_disease_rows %}<section class="panel"><div class="panel-title"><div><h2>10 penyakit terbanyak</h2><p>Diagnosis per instalasi.</p></div></div><div class="table-wrap"><table><thead><tr><th>Instalasi</th><th>Kode ICD-10</th><th>Nama penyakit</th><th>Jumlah pasien</th></tr></thead><tbody>{% for row in form.bound_disease_rows %}<tr><td>{{ row.installation }}</td><td>{{ row.code }}{{ row.code.errors }}</td><td>{{ row.name }}{{ row.name.errors }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% if form.bound_tourist_rows %}<section class="panel"><div class="panel-title"><div><h2>Kunjungan wisatawan</h2><p>Pasien domestik dari Kabupaten Lombok Tengah dan wilayah belum dikenali tidak dipublikasikan; seluruh wilayah domestik lainnya dihitung sebagai Wisnus.</p></div></div><div class="table-wrap"><table><thead><tr><th>Kategori</th><th>Asal SIMRS</th><th>Wilayah hasil mapping</th><th>Status</th><th>Jumlah</th></tr></thead><tbody>{% for row in form.bound_tourist_rows %}<tr><td>{{ row.category_label }}</td><td>{{ row.origin }}{{ row.origin.errors }}</td><td>{{ row.mapped_name|default:"Belum dipetakan" }}</td><td><span class="mapping-status {{ row.cleaning_method }}">{{ row.mapping_status }}</span></td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="panel-title section-gap"><div><h3>Hasil mapping berdasarkan nama baku</h3><p>Variasi nama dari SIMRS digabungkan ke wilayah baku yang sama. Baris yang belum dikenali tetap ditampilkan untuk ditindaklanjuti pada Master Wilayah.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Nama baku</th><th>Kode resmi</th><th>Nama asal SIMRS</th><th>Kategori</th><th>Metode</th><th>Status hasil</th><th>Jumlah</th></tr></thead><tbody>{% for row in form.tourist_mapping_summary %}<tr><td><strong>{{ row.canonical_name }}</strong></td><td><code>{{ row.canonical_code }}</code></td><td>{{ row.raw_names|join:", " }}</td><td>{{ row.category }}</td><td>{{ row.methods|join:", " }}</td><td>{{ row.status }}</td><td><strong>{{ row.count }}</strong></td></tr>{% empty %}<tr><td colspan="7" class="empty">Belum ada hasil mapping wisatawan.</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% if form.bound_group_rows %}<section class="panel"><div class="panel-title"><div><h2>{{ indicator.name }}</h2><p>Jumlah pasien berdasarkan kelompok ICD-10.</p></div></div><div class="table-wrap"><table><thead><tr><th>Kelompok</th><th>Rentang ICD-10</th><th>Jumlah pasien</th></tr></thead><tbody>{% for row in form.bound_group_rows %}<tr><td>{{ row.code }}</td><td>{{ row.icd10_range }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+<section class="panel notes"><label>{{ form.notes.label }}{{ form.notes }}{{ form.notes.errors }}</label><div class="actions"><a class="button secondary" href="{% url 'verification:health-indicators' %}">Kembali</a><button name="action" value="save" class="secondary">Simpan draf</button>{% if perms.verification.approve_verifiedmonthlyhealthindicator %}<button name="action" value="approve" class="primary">Setujui dan publikasikan</button>{% endif %}</div></section>
 </form>
 {% endblock %}

@@ -6,7 +6,7 @@ from verification.services import fetch_inpatient_indicator
 
 
 class Command(BaseCommand):
-    help = "Ambil JSON indikator bulanan dari PHP dan hitung ulang di Django."
+    help = "Ambil JSON indikator bulanan dari SIMRS dan hitung ulang di DataHub."
 
     def add_arguments(self, parser):
         parser.add_argument("--period", required=True, help="Periode YYYY-MM")

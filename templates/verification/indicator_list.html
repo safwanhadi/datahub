@@ -5,8 +5,8 @@
 <section class="panel">
     <div class="panel-title">
         <div>
-            <h2>Data bulanan</h2>
-            <p>Ambil data dari SIMRS, periksa nilainya, kemudian setujui.</p>
+            <h2>{% if perms.verification.add_inpatientindicatorsource and not perms.verification.change_verifiedinpatientindicator %}Pengambilan data SIMRS{% elif perms.verification.change_verifiedinpatientindicator and not perms.verification.add_inpatientindicatorsource %}Antrean verifikasi RM{% else %}Data indikator rawat inap{% endif %}</h2>
+            <p>{% if perms.verification.add_inpatientindicatorsource and not perms.verification.change_verifiedinpatientindicator %}Pilih periode dan ambil snapshot terbaru dari sistem SIMRS.{% elif perms.verification.change_verifiedinpatientindicator and not perms.verification.add_inpatientindicatorsource %}Periksa hasil perhitungan sebelum data disetujui dan dipublikasikan.{% elif perms.verification.add_inpatientindicatorsource or perms.verification.change_verifiedinpatientindicator %}Ambil data dari SIMRS, periksa nilainya, kemudian setujui.{% else %}Lihat hasil indikator dan status verifikasi setiap periode tanpa mengubah data.{% endif %}</p>
         </div>
     {% if perms.verification.add_inpatientindicatorsource %}
     <form method="post" action="{% url 'verification:indicator-sync' %}" class="sync-form period-form">
@@ -52,16 +52,18 @@
                     <span class="badge {% if item.verification.status == 'approved' %}verified{% else %}in_review{% endif %}">
                         {{ item.verification.get_status_display }}
                     </span>
+                    <small>{{ item.verification.room_indicators.all|length }} ruang</small>
                 </td>
                 <td>
                     {% if perms.verification.change_verifiedinpatientindicator %}
-                        <a class="button secondary small" href="{% url 'verification:indicator-verify' item.pk %}">Periksa</a>
+                        <a class="button secondary small" href="{% url 'verification:inpatient-working-data-correct' item.pk %}">Ubah data dasar</a>
+                        <a class="button secondary small" href="{% url 'verification:indicator-verify' item.pk %}">Periksa &amp; verifikasi</a>
                     {% endif %}
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" class="empty">Belum ada data. Pilih bulan lalu klik “Ambil dari SIMRS”.</td>
+                <td colspan="9" class="empty">{% if perms.verification.add_inpatientindicatorsource %}Belum ada data. Pilih periode lalu ambil data dari SIMRS.{% else %}Belum ada data indikator rawat inap yang dapat ditampilkan.{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

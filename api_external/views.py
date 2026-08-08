@@ -6,8 +6,8 @@ from api_access.authentication import SimaduOpaqueTokenAuthentication
 from api_access.mixins import ExternalApiAuditMixin
 from api_access.permissions import HasExternalApiGrant
 from api_access.throttling import ExternalClientRateThrottle
-from verification.health_metadata import HEALTH_INDICATORS, indicator_payload
-from verification.models import VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
+from verification.health_metadata import HEALTH_INDICATORS, indicator_payload, verification_group_for_indicator
+from verification.models import HealthIndicatorVerification, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
 from verification.views import INDICATOR_META
 
 from .serializers import ExternalHealthIndicatorEnvelopeSerializer, ExternalIndicatorEnvelopeSerializer
@@ -93,7 +93,10 @@ class ExternalHealthIndicatorList(ExternalApiView):
     def get(self, request, code):
         if code not in HEALTH_INDICATORS:
             return Response({"detail": "Indikator tidak ditemukan."}, status=404)
-        records = VerifiedMonthlyHealthIndicator.objects.select_related("source").prefetch_related("visit_rows", "top_disease_rows", "tourist_visit_rows", "disease_group_rows").filter(status=VerifiedMonthlyHealthIndicator.Status.APPROVED)
+        records = VerifiedMonthlyHealthIndicator.objects.select_related("source").prefetch_related("visit_rows", "top_disease_rows", "tourist_visit_rows", "disease_group_rows").filter(
+            indicator_verifications__indicator_code=verification_group_for_indicator(code),
+            indicator_verifications__status=HealthIndicatorVerification.Status.APPROVED,
+        )
         if request.query_params.get("tahun"): records = records.filter(period__year=request.query_params["tahun"])
         if request.query_params.get("bulan"): records = records.filter(period__month=request.query_params["bulan"])
         results = [{**_period_fields(item.source), "data": indicator_payload(item.to_payload(), code), "diverifikasi_pada": item.verified_at} for item in records]

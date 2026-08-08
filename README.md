@@ -1,4 +1,4 @@
-# SIMRS DataHub (Django)
+# SIMRS DataHub
 
 Aplikasi pengambilan dan verifikasi indikator SIMRS. Data sumber diambil dari
 endpoint SIMRS pada masing-masing menu indikator dan disimpan sebagai snapshot
@@ -50,20 +50,27 @@ DataHub memvalidasi token melalui introspection SIMADU dan mewajibkan scope
 Konfigurasi produksi memakai environment variable `DJANGO_SECRET_KEY`,
 `DJANGO_DEBUG=false`, dan `DJANGO_ALLOWED_HOSTS`.
 
-## Sumber JSON PHP dan perhitungan ulang Django
+## Sumber JSON SIMRS dan perhitungan ulang DataHub
 
 Tahap pertama mengikuti enam kebutuhan awal pada workbook: ALOS, BOR, BTO, TOI,
-GDR, dan NDR. Django tidak terhubung ke database SIMRS. PHP mengirim data dasar
-dan hasil hitung awal dalam JSON; Django mengarsipkan keduanya lalu menghitung
+GDR, dan NDR. DataHub tidak terhubung langsung ke database SIMRS. SIMRS mengirim data dasar
+dan hasil hitung awal dalam JSON; DataHub mengarsipkan keduanya lalu menghitung
 ulang keenam indikator secara independen dari data dasar.
 
 ```powershell
 $env:SIMRS_INDICATOR_API_URL="https://server-internal/refrensi_app/dashboard_eksekutif/api/data_indikator_ranap.php"
+$env:SIMRS_INPATIENT_ROOMS_API_URL="https://server-internal/refrensi_app/dashboard_eksekutif/api/data_indikator_per_bangsal.php"
+$env:INPATIENT_TOTAL_EXCLUDED_ROOM_KEYWORDS="ICU,NICU,PICU,PERINA,VK"
 $env:SIMADU_TOKEN_URL="https://simadu.rsmandalika.com/o/token/"
 $env:SIMADU_CLIENT_ID="datahub-simrs-reader"
 $env:SIMADU_CLIENT_SECRET="secret-dari-simadu"
 $env:SIMADU_SIMRS_SCOPE="simrs.indicators.read"
+$env:TOURIST_LOCAL_REGION_CODES="52.02"
 ```
+
+`TOURIST_LOCAL_REGION_CODES` menetapkan wilayah domestik yang tidak dihitung
+sebagai wisatawan. Nilai bawaan `52.02` mencakup Kabupaten Lombok Tengah beserta
+seluruh kecamatan/desa turunannya; wilayah domestik lain dihitung sebagai Wisnus.
 
 DataHub meminta opaque token baru kepada SIMADU secara otomatis dan menyimpannya
 sementara di cache sampai mendekati kedaluwarsa.
@@ -119,7 +126,7 @@ Semua endpoint menerima `?tahun=2026&bulan=6` dan membutuhkan Bearer Token.
 DataHub membutuhkan dua registrasi mesin yang terpisah:
 
 1. `datahub-simrs-reader`, grant `client_credentials`, scope
-   `simrs.indicators.read`. Credential ini dipakai DataHub untuk membaca PHP/SIMRS.
+   `simrs.indicators.read`. Credential ini dipakai DataHub untuk membaca API SIMRS.
 2. `datahub-resource-server`, credential khusus untuk memanggil introspection
    SIMADU. Credential ini tidak dikirim kepada pihak ketiga.
 
@@ -142,7 +149,7 @@ DataHub menyediakan dua kontrak OpenAPI yang terpisah:
 - API internal: `/api/internal/v1/`, Swagger `/docs/internal/`.
 - API eksternal: `/api/external/v1/`, Swagger `/docs/external/`.
 
-API internal menggunakan session login Django/SSO. API eksternal menggunakan
+API internal menggunakan sesi login DataHub/SSO. API eksternal menggunakan
 opaque Bearer Token SIMADU, lalu memeriksa `client_id`, scope, produk API yang
 diberikan, masa berlaku grant, dan rate limit client.
 
@@ -151,7 +158,7 @@ Enam produk indikator dibuat otomatis oleh migrasi dengan kode
 `indicator-gdr`, dan `indicator-ndr`. Untuk membuka akses kepada mitra:
 
 1. Buat OAuth client khusus mitra di SIMADU.
-2. Buat **Client API eksternal** di Django Admin dengan `client_id` yang sama.
+2. Buat **Client API eksternal** di Admin DataHub dengan `client_id` yang sama.
 3. Tambahkan hanya **Izin client eksternal** yang disetujui.
 4. Atur batas request per menit dan, bila diperlukan, tanggal kedaluwarsa grant.
 
