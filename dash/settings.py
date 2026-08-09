@@ -225,7 +225,7 @@ TOURIST_LOCAL_REGION_CODES = tuple(
 
 # Cookie/HTTPS hardening otomatis aktif ketika mode production digunakan.
 if not DEBUG and not TESTING:
-    SECURE_SSL_REDIRECT = True
+    # SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "3600"))
