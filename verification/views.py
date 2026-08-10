@@ -19,7 +19,7 @@ from .analytics import analyze_inpatient_record, get_applicable_standards
 from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow
 from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS
 from .oauth import OAuthServerUnavailable
-from .services import fetch_inpatient_indicator, fetch_monthly_health_indicators, reprocess_region_mappings, save_inpatient_verification, save_inpatient_working_data_correction, save_monthly_health_verification
+from .services import SimrsConnectionError, fetch_inpatient_indicator, fetch_monthly_health_indicators, reprocess_region_mappings, save_inpatient_verification, save_inpatient_working_data_correction, save_monthly_health_verification
 
 
 @login_required
@@ -334,6 +334,7 @@ def sync_inpatient_indicators(request):
         except (
             ImproperlyConfigured,
             OAuthServerUnavailable,
+            SimrsConnectionError,
             OSError,
             KeyError,
             ValueError,
