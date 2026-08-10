@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
     InpatientIndicatorSource,
@@ -111,6 +112,54 @@ class VerificationFlowTests(TestCase):
         page = self.client.get(reverse("verification:indicator-verify", args=[source.pk]))
         self.assertContains(page, "Indikator per ruang rawat inap")
         self.assertContains(page, "Ruang Anak")
+
+    def test_refetch_resets_approval_and_replaces_working_data_and_rooms(self):
+        period = date(2027, 6, 1)
+        original = {
+            "periode": {"hari": 30},
+            "data_dasar": {"jumlah_bed": 20, "hari_perawatan": 300, "pasien_keluar": 60, "pasien_mati": 3, "pasien_mati_48": 1},
+            "indikator": {"alos": 5, "bor": 50, "bto": 3, "toi": 5, "gdr": 50, "ndr": 16.67},
+            "ruangan": [
+                {"kd_bangsal": "LAMA", "bangsal": "Ruang Lama", "bed": 10, "hp": 150, "d": 30, "mati": 2, "mati_48": 1},
+                {"kd_bangsal": "TETAP", "bangsal": "Ruang Tetap", "bed": 10, "hp": 150, "d": 30, "mati": 1, "mati_48": 0},
+            ],
+        }
+        source = store_inpatient_indicator(period=period, payload=original, user=self.user)
+        record = source.verification
+        record.status = VerifiedInpatientIndicator.Status.APPROVED
+        record.notes = "Data lama disetujui"
+        record.verified_by = self.user
+        record.verified_at = timezone.now()
+        record.bor = 51
+        record.save()
+
+        corrected = {
+            "periode": {"hari": 30},
+            "data_dasar": {"jumlah_bed": 25, "hari_perawatan": 450, "pasien_keluar": 75, "pasien_mati": 2, "pasien_mati_48": 1},
+            "indikator": {"alos": 6, "bor": 60, "bto": 3, "toi": 4, "gdr": 26.67, "ndr": 13.33},
+            "ruangan": [
+                {"kd_bangsal": "TETAP", "bangsal": "Ruang Tetap", "bed": 10, "hp": 210, "d": 35, "mati": 1, "mati_48": 1},
+                {"kd_bangsal": "BARU", "bangsal": "Ruang Baru", "bed": 15, "hp": 240, "d": 40, "mati": 1, "mati_48": 0},
+            ],
+        }
+        refreshed_source = store_inpatient_indicator(period=period, payload=corrected, user=self.user)
+
+        self.assertEqual(refreshed_source.pk, source.pk)
+        record.refresh_from_db()
+        self.assertEqual(record.status, VerifiedInpatientIndicator.Status.DRAFT)
+        self.assertIsNone(record.verified_by)
+        self.assertIsNone(record.verified_at)
+        self.assertEqual(record.notes, "")
+        self.assertEqual(record.working_beds, 25)
+        self.assertEqual(record.working_care_days, 450)
+        self.assertEqual(record.bor, 60)
+        self.assertSetEqual(
+            set(refreshed_source.room_sources.values_list("room_code", flat=True)),
+            {"TETAP", "BARU"},
+        )
+        audit = InpatientIndicatorAudit.objects.get(record=record, action="refetched_from_simrs")
+        self.assertEqual(audit.before_data["status"], VerifiedInpatientIndicator.Status.APPROVED)
+        self.assertEqual(audit.after_data["status"], VerifiedInpatientIndicator.Status.DRAFT)
 
     def test_api_documentation_hub_exposes_shareable_and_internal_links(self):
         response = self.client.get(reverse("verification:api-documentation"))
