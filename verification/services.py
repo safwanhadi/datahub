@@ -99,7 +99,7 @@ def store_inpatient_indicator(*, period=None, period_start=None, period_end=None
         deaths_over_48h=basic["pasien_mati_48"],
         days=payload.get("periode", {}).get("hari", (end - start).days + 1),
     )
-    source, _ = InpatientIndicatorSource.objects.update_or_create(
+    source, source_created = InpatientIndicatorSource.objects.update_or_create(
         period_type=period_type,
         period_start=start,
         period_end=end,
@@ -119,9 +119,9 @@ def store_inpatient_indicator(*, period=None, period_start=None, period_end=None
             **{f"calculated_{key}": calculated[key] for key in ("alos", "bor", "bto", "toi", "gdr", "ndr")},
             "raw_response": payload,
             "fetched_by": user,
+            "fetched_at": timezone.now(),
         },
     )
-    # Jika sudah disetujui, snapshot baru tidak menimpa hasil verifikasi.
     if not hasattr(source, "verification"):
         verified = VerifiedInpatientIndicator.objects.create(
             source=source,
@@ -140,6 +140,50 @@ def store_inpatient_indicator(*, period=None, period_start=None, period_end=None
             action="copied_from_simrs",
             before_data=None,
             after_data={key: str(getattr(verified, key)) for key in ("alos", "bor", "bto", "toi", "gdr", "ndr")},
+            actor=user,
+        )
+    elif not source_created:
+        # Penarikan ulang berarti snapshot SIMRS berubah. Hasil lama tidak boleh
+        # tetap berstatus terverifikasi karena berasal dari snapshot sebelumnya.
+        verified = source.verification
+        fields = ("alos", "bor", "bto", "toi", "gdr", "ndr")
+        before = {
+            "status": verified.status,
+            "working_beds": verified.working_beds,
+            "working_care_days": verified.working_care_days,
+            "working_discharged_patients": verified.working_discharged_patients,
+            "working_deaths": verified.working_deaths,
+            "working_deaths_over_48h": verified.working_deaths_over_48h,
+            "working_days_in_period": verified.working_days_in_period,
+            **{key: str(getattr(verified, key)) for key in fields},
+        }
+        verified.working_beds = source.beds
+        verified.working_care_days = source.care_days
+        verified.working_discharged_patients = source.discharged_patients
+        verified.working_deaths = source.deaths
+        verified.working_deaths_over_48h = source.deaths_over_48h
+        verified.working_days_in_period = source.days_in_period
+        for key in fields:
+            setattr(verified, key, getattr(source, f"calculated_{key}"))
+        verified.status = VerifiedInpatientIndicator.Status.DRAFT
+        verified.notes = ""
+        verified.verified_by = None
+        verified.verified_at = None
+        verified.save()
+        InpatientIndicatorAudit.objects.create(
+            record=verified,
+            action="refetched_from_simrs",
+            before_data=before,
+            after_data={
+                "status": verified.status,
+                "working_beds": verified.working_beds,
+                "working_care_days": verified.working_care_days,
+                "working_discharged_patients": verified.working_discharged_patients,
+                "working_deaths": verified.working_deaths,
+                "working_deaths_over_48h": verified.working_deaths_over_48h,
+                "working_days_in_period": verified.working_days_in_period,
+                **{key: str(getattr(verified, key)) for key in fields},
+            },
             actor=user,
         )
     _store_inpatient_room_indicators(
@@ -161,11 +205,15 @@ def _room_value(row, *names, default=0):
 def _store_inpatient_room_indicators(*, source, verification, rooms, days):
     if not isinstance(rooms, list):
         raise ValueError("Data indikator per ruang harus berupa array.")
+    received_codes = set()
     for index, row in enumerate(rooms):
         code = str(_room_value(row, "kode_ruang", "kd_bangsal", "code", default="")).strip()
         name = str(_room_value(row, "nama_ruang", "bangsal", "name", default="")).strip()
         if not code or not name:
             raise ValueError(f"ruangan[{index}] wajib memiliki kode dan nama ruang.")
+        if code in received_codes:
+            raise ValueError(f"Kode ruang {code} dikirim lebih dari satu kali.")
+        received_codes.add(code)
         basics = {
             "beds": int(_room_value(row, "jumlah_bed", "bed")),
             "care_days": int(_room_value(row, "hari_perawatan", "hp")),
@@ -193,6 +241,9 @@ def _store_inpatient_room_indicators(*, source, verification, rooms, days):
             verification=verification, source_room=source_room,
             defaults=calculated,
         )
+    stale_rooms = source.room_sources.exclude(room_code__in=received_codes)
+    VerifiedInpatientRoomIndicator.objects.filter(source_room__in=stale_rooms).delete()
+    stale_rooms.delete()
 
 
 def calculate_inpatient_indicators(
