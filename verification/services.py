@@ -1,8 +1,10 @@
 import json
 import re
+import socket
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -33,6 +35,40 @@ from .models import (
 )
 from .oauth import get_simrs_access_token
 from .health_metadata import HEALTH_VERIFICATION_GROUPS, normalize_health_payload
+
+
+class SimrsConnectionError(Exception):
+    """Kesalahan koneksi SIMRS yang aman ditampilkan kepada operator."""
+
+
+def _fetch_simrs_json(url, *, headers, timeout, endpoint_name):
+    try:
+        with urlopen(Request(url, headers=headers), timeout=timeout) as response:
+            return json.load(response)
+    except HTTPError as exc:
+        raise SimrsConnectionError(
+            f"Endpoint {endpoint_name} menolak permintaan (HTTP {exc.code})."
+        ) from exc
+    except URLError as exc:
+        host = Request(url).host
+        reason = exc.reason
+        if isinstance(reason, socket.gaierror):
+            raise SimrsConnectionError(
+                f"DNS server production tidak dapat menemukan host {host} "
+                f"untuk endpoint {endpoint_name}. Periksa DNS atau /etc/hosts "
+                "pada server/container aplikasi."
+            ) from exc
+        raise SimrsConnectionError(
+            f"Endpoint {endpoint_name} ({host}) tidak dapat dihubungi: {reason}."
+        ) from exc
+    except TimeoutError as exc:
+        raise SimrsConnectionError(
+            f"Endpoint {endpoint_name} tidak merespons dalam {timeout} detik."
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise SimrsConnectionError(
+            f"Endpoint {endpoint_name} tidak mengembalikan JSON yang valid."
+        ) from exc
 
 
 def resolve_simrs_endpoint(code, fallback_url=""):
@@ -205,8 +241,12 @@ def fetch_inpatient_indicator(*, period=None, period_start=None, period_end=None
         "Accept": "application/json",
         "Authorization": f"Bearer {get_simrs_access_token()}",
     }
-    with urlopen(Request(url, headers=headers), timeout=timeout) as response:
-        payload = json.load(response)
+    payload = _fetch_simrs_json(
+        url,
+        headers=headers,
+        timeout=timeout,
+        endpoint_name="indikator rawat inap",
+    )
     rooms_url, rooms_timeout = resolve_simrs_endpoint(
         SimrsApiEndpoint.Code.INPATIENT_ROOMS,
         settings.SIMRS_INPATIENT_ROOMS_API_URL,
@@ -215,8 +255,12 @@ def fetch_inpatient_indicator(*, period=None, period_start=None, period_end=None
     rooms_request_url = rooms_url + separator + urlencode(
         {"tgl_awal": start.isoformat(), "tgl_akhir": end.isoformat()}
     )
-    with urlopen(Request(rooms_request_url, headers=headers), timeout=rooms_timeout) as response:
-        rooms_payload = json.load(response)
+    rooms_payload = _fetch_simrs_json(
+        rooms_request_url,
+        headers=headers,
+        timeout=rooms_timeout,
+        endpoint_name="indikator rawat inap per ruang",
+    )
     rooms = rooms_payload.get("data", rooms_payload.get("results", rooms_payload.get("ruangan")))
     if not isinstance(rooms, list):
         raise ValueError("Endpoint indikator per ruang harus mengembalikan data berupa array.")

@@ -348,6 +348,22 @@ class FlexiblePeriodAndRowFormTests(TestCase):
 
 
 class DynamicSimrsEndpointTests(TestCase):
+    @patch("verification.services.get_simrs_access_token", return_value="simrs-token")
+    @patch("verification.services.urlopen")
+    def test_inpatient_dns_error_identifies_endpoint_and_host(self, urlopen_mock, token_mock):
+        import socket
+        from urllib.error import URLError
+
+        from .services import SimrsConnectionError, fetch_inpatient_indicator
+
+        urlopen_mock.side_effect = URLError(socket.gaierror(-2, "Name or service not known"))
+
+        with self.assertRaisesRegex(
+            SimrsConnectionError,
+            r"DNS server production.*host .+.*indikator rawat inap",
+        ):
+            fetch_inpatient_indicator(period=date(2027, 5, 1))
+
     def test_database_endpoint_has_priority_over_environment_fallback(self):
         endpoint = SimrsApiEndpoint.objects.get(code=SimrsApiEndpoint.Code.INPATIENT_INDICATORS)
         endpoint.url = "https://simrs.example/api/inpatient/"
