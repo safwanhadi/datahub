@@ -2,11 +2,14 @@ from django.contrib import admin
 
 from .models import (
     SimrsApiEndpoint,
+    AdministrativeRegion,
+    RegionAlias,
     InpatientIndicatorStandard,
     InpatientIndicatorAudit,
     InpatientIndicatorSource,
     MonthlyHealthIndicatorAudit,
     MonthlyHealthIndicatorSource,
+    HealthIndicatorVerification,
     VerifiedInpatientIndicator,
     VerifiedMonthlyHealthIndicator,
     VerifiedHealthVisitRow,
@@ -14,6 +17,19 @@ from .models import (
     VerifiedTouristVisitRow,
     VerifiedDiseaseGroupRow,
 )
+
+
+class RegionAliasInline(admin.TabularInline):
+    model = RegionAlias
+    extra = 0
+
+
+@admin.register(AdministrativeRegion)
+class AdministrativeRegionAdmin(admin.ModelAdmin):
+    list_display = ("official_code", "name", "region_type", "parent", "island_group", "is_active")
+    list_filter = ("region_type", "is_active", "island_group")
+    search_fields = ("official_code", "name", "aliases__alias")
+    inlines = (RegionAliasInline,)
 
 
 @admin.register(InpatientIndicatorStandard)
@@ -52,6 +68,13 @@ class MonthlyHealthIndicatorAuditInline(admin.TabularInline):
     can_delete = False
 
 
+class HealthIndicatorVerificationInline(admin.TabularInline):
+    model = HealthIndicatorVerification
+    extra = 0
+    readonly_fields = ("indicator_code", "status", "notes", "verified_by", "verified_at", "updated_at")
+    can_delete = False
+
+
 class VerifiedHealthVisitRowInline(admin.TabularInline):
     model = VerifiedHealthVisitRow
     extra = 0
@@ -77,7 +100,7 @@ class VerifiedMonthlyHealthIndicatorAdmin(admin.ModelAdmin):
     list_display = ("period", "status", "verified_by", "verified_at")
     list_filter = ("status",)
     readonly_fields = ("source", "period", "verified_data", "verified_by", "verified_at", "updated_at")
-    inlines = (VerifiedHealthVisitRowInline, VerifiedTopDiseaseRowInline, VerifiedTouristVisitRowInline, VerifiedDiseaseGroupRowInline, MonthlyHealthIndicatorAuditInline)
+    inlines = (HealthIndicatorVerificationInline, VerifiedHealthVisitRowInline, VerifiedTopDiseaseRowInline, VerifiedTouristVisitRowInline, VerifiedDiseaseGroupRowInline, MonthlyHealthIndicatorAuditInline)
 
 
 @admin.register(InpatientIndicatorSource)

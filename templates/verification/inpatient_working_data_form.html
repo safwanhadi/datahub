@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Koreksi Data Dasar Rawat Inap{% endblock %}
+{% block heading %}Koreksi data dasar rawat inap{% endblock %}
+{% block content %}
+<div class="notice"><strong>Snapshot asli SIMRS tetap disimpan dan tidak diubah.</strong> Koreksi ini diterapkan pada salinan data kerja, lalu enam indikator dihitung ulang oleh DataHub dan dikembalikan ke status draf.</div>
+<div class="compare-banner"><span>Snapshot SIMRS</span><b>→</b><span class="active">Koreksi data dasar</span><b>→</b><span>Hitung &amp; verifikasi ulang</span></div>
+<section class="panel source-summary"><div class="panel-title"><div><h2>Snapshot asli SIMRS</h2><p>Periode {{ source.period_start|date:"d M Y" }} – {{ source.period_end|date:"d M Y" }} · Diambil {{ source.fetched_at|date:"d M Y H:i" }}</p></div></div>
+<div class="basic-data"><div><small>Tempat tidur</small><strong>{{ source.beds }}</strong></div><div><small>Hari perawatan</small><strong>{{ source.care_days }}</strong></div><div><small>Pasien keluar</small><strong>{{ source.discharged_patients }}</strong></div><div><small>Pasien meninggal</small><strong>{{ source.deaths }}</strong></div><div><small>Meninggal &gt;48 jam</small><strong>{{ source.deaths_over_48h }}</strong></div><div><small>Jumlah hari</small><strong>{{ source.days_in_period }}</strong></div></div></section>
+<form method="post" class="stack">{% csrf_token %}{{ form.non_field_errors }}
+<section class="panel"><div class="panel-title"><div><h2>Salinan data kerja</h2><p>Masukkan data nyata hasil konfirmasi lapangan.</p></div></div><div class="form-grid">
+<label>{{ form.beds.label }}{{ form.beds }}{{ form.beds.errors }}</label><label>{{ form.care_days.label }}{{ form.care_days }}{{ form.care_days.errors }}</label><label>{{ form.discharged_patients.label }}{{ form.discharged_patients }}{{ form.discharged_patients.errors }}</label><label>{{ form.deaths.label }}{{ form.deaths }}{{ form.deaths.errors }}</label><label>{{ form.deaths_over_48h.label }}{{ form.deaths_over_48h }}{{ form.deaths_over_48h.errors }}</label><label>{{ form.days_in_period.label }}{{ form.days_in_period }}{{ form.days_in_period.errors }}</label>
+</div></section>
+<section class="panel notes"><label>{{ form.reason.label }}{{ form.reason }}{{ form.reason.errors }}<small>{{ form.reason.help_text }}</small></label><div class="actions"><a class="button secondary" href="{% url 'verification:indicators' %}">Batal</a><button class="primary" type="submit">Simpan dan hitung ulang</button></div></section>
+</form>
+{% endblock %}

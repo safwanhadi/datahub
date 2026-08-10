@@ -1,17 +1,52 @@
 import hashlib
+import re
 import secrets
+import unicodedata
 import uuid
 from django.utils import timezone
+
+
+def normalize_region_name(value):
+    value = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode()
+    return re.sub(r"[^A-Z0-9]+", " ", value.upper()).strip()
+
+
+def normalize_region_code(value):
+    """Ubah kode integer SIMRS (mis. 5202) menjadi kode resmi (52.02)."""
+    code = str(value or "").strip()
+    if not code or "." in code or not code.isdigit():
+        return code
+    segment_lengths = {2: (2,), 4: (2, 2), 6: (2, 2, 2), 10: (2, 2, 2, 4)}
+    lengths = segment_lengths.get(len(code))
+    if not lengths:
+        return code
+    segments = []
+    offset = 0
+    for length in lengths:
+        segments.append(code[offset:offset + length])
+        offset += length
+    return ".".join(segments)
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
 
+def is_local_tourist_region(region):
+    """True untuk Kabupaten Lombok Tengah dan seluruh wilayah turunannya."""
+    if region is None:
+        return False
+    code = str(region.official_code or "").strip()
+    return any(
+        code == root or code.startswith(f"{root}.")
+        for root in settings.TOURIST_LOCAL_REGION_CODES
+    )
+
+
 class SimrsApiEndpoint(models.Model):
     class Code(models.TextChoices):
         INPATIENT_INDICATORS = "inpatient-indicators", "Indikator Rawat Inap"
-        HEALTH_AGGREGATE = "health-aggregate", "Indikator Kesehatan (Agregat)"
+        INPATIENT_ROOMS = "inpatient-rooms", "Indikator Rawat Inap per Ruang"
         VISITS = "visits", "Kunjungan Pasien"
         TOP_DISEASES = "top-diseases", "10 Penyakit Terbanyak"
         TOURIST_VISITS = "tourist-visits", "Kunjungan Wisatawan"
@@ -94,6 +129,63 @@ class InpatientIndicatorStandard(models.Model):
         return f"{self.get_indicator_display()} — {self.get_policy_level_display()} ({self.effective_from:%d-%m-%Y})"
 
 
+class AdministrativeRegion(models.Model):
+    class RegionType(models.TextChoices):
+        COUNTRY = "country", "Negara"
+        PROVINCE = "province", "Provinsi"
+        REGENCY = "regency", "Kabupaten"
+        CITY = "city", "Kota"
+        DISTRICT = "district", "Kecamatan"
+        VILLAGE = "village", "Desa/Kelurahan"
+        OTHER = "other", "Lainnya"
+
+    official_code = models.CharField("kode wilayah resmi", max_length=30, unique=True)
+    name = models.CharField("nama wilayah baku", max_length=180)
+    normalized_name = models.CharField(max_length=180, editable=False, db_index=True)
+    region_type = models.CharField("jenis wilayah", max_length=20, choices=RegionType)
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="children", verbose_name="wilayah induk")
+    island_group = models.CharField("kelompok pulau/analitik", max_length=120, blank=True)
+    is_active = models.BooleanField("aktif", default=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="updated_regions")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "master wilayah"
+        verbose_name_plural = "master wilayah"
+
+    def save(self, *args, **kwargs):
+        self.normalized_name = normalize_region_name(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({self.official_code})"
+
+
+class RegionAlias(models.Model):
+    region = models.ForeignKey(AdministrativeRegion, on_delete=models.CASCADE, related_name="aliases")
+    alias = models.CharField("nama/alias dari sumber", max_length=180)
+    normalized_alias = models.CharField(max_length=180, editable=False, unique=True)
+    source_system = models.CharField("sistem sumber", max_length=50, default="SIMRS")
+    is_active = models.BooleanField("aktif", default=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="updated_region_aliases")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("alias",)
+        verbose_name = "alias wilayah"
+        verbose_name_plural = "alias wilayah"
+
+    def save(self, *args, **kwargs):
+        self.normalized_alias = normalize_region_name(self.alias)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.alias} → {self.region.name}"
+
+
 class ExternalApiToken(models.Model):
     name = models.CharField("nama aplikasi", max_length=120)
     prefix = models.CharField(max_length=12, unique=True, editable=False)
@@ -133,7 +225,7 @@ class ExternalApiToken(models.Model):
 
 
 class InpatientIndicatorSource(models.Model):
-    """Snapshot JSON PHP dan perhitungan ulang Django; tidak diedit verifikator."""
+    """Snapshot JSON SIMRS dan perhitungan ulang DataHub; tidak diedit verifikator."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     period = models.DateField("periode", help_text="Tanggal awal laporan")
@@ -152,13 +244,13 @@ class InpatientIndicatorSource(models.Model):
     toi = models.DecimalField(max_digits=10, decimal_places=2)
     gdr = models.DecimalField(max_digits=10, decimal_places=2)
     ndr = models.DecimalField(max_digits=10, decimal_places=2)
-    calculated_alos = models.DecimalField("ALOS hitung Django", max_digits=10, decimal_places=2, default=0)
-    calculated_bor = models.DecimalField("BOR hitung Django", max_digits=10, decimal_places=2, default=0)
-    calculated_bto = models.DecimalField("BTO hitung Django", max_digits=10, decimal_places=2, default=0)
-    calculated_toi = models.DecimalField("TOI hitung Django", max_digits=10, decimal_places=2, default=0)
-    calculated_gdr = models.DecimalField("GDR hitung Django", max_digits=10, decimal_places=2, default=0)
-    calculated_ndr = models.DecimalField("NDR hitung Django", max_digits=10, decimal_places=2, default=0)
-    raw_response = models.JSONField("respons asli PHP")
+    calculated_alos = models.DecimalField("ALOS hitung DataHub", max_digits=10, decimal_places=2, default=0)
+    calculated_bor = models.DecimalField("BOR hitung DataHub", max_digits=10, decimal_places=2, default=0)
+    calculated_bto = models.DecimalField("BTO hitung DataHub", max_digits=10, decimal_places=2, default=0)
+    calculated_toi = models.DecimalField("TOI hitung DataHub", max_digits=10, decimal_places=2, default=0)
+    calculated_gdr = models.DecimalField("GDR hitung DataHub", max_digits=10, decimal_places=2, default=0)
+    calculated_ndr = models.DecimalField("NDR hitung DataHub", max_digits=10, decimal_places=2, default=0)
+    raw_response = models.JSONField("respons asli SIMRS")
     fetched_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL
     )
@@ -182,6 +274,12 @@ class VerifiedInpatientIndicator(models.Model):
         InpatientIndicatorSource, on_delete=models.PROTECT, related_name="verification"
     )
     period = models.DateField("periode")
+    working_beds = models.PositiveIntegerField("tempat tidur data kerja", default=0)
+    working_care_days = models.PositiveIntegerField("hari perawatan data kerja", default=0)
+    working_discharged_patients = models.PositiveIntegerField("pasien keluar data kerja", default=0)
+    working_deaths = models.PositiveIntegerField("kematian data kerja", default=0)
+    working_deaths_over_48h = models.PositiveIntegerField("kematian >48 jam data kerja", default=0)
+    working_days_in_period = models.PositiveSmallIntegerField("jumlah hari data kerja", default=1)
     alos = models.DecimalField("ALOS (hari)", max_digits=10, decimal_places=2)
     bor = models.DecimalField("BOR (%)", max_digits=10, decimal_places=2)
     bto = models.DecimalField("BTO (kali)", max_digits=10, decimal_places=2)
@@ -221,6 +319,44 @@ class InpatientIndicatorAudit(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+
+
+class InpatientRoomIndicatorSource(models.Model):
+    """Snapshot data dasar dan hasil hitung SIMRS untuk satu ruang rawat inap."""
+    source = models.ForeignKey(InpatientIndicatorSource, on_delete=models.CASCADE, related_name="room_sources")
+    room_code = models.CharField("kode ruang", max_length=40)
+    room_name = models.CharField("nama ruang", max_length=180)
+    is_special = models.BooleanField("ruang khusus", default=False)
+    beds = models.PositiveIntegerField("tempat tidur")
+    care_days = models.PositiveIntegerField("hari perawatan")
+    discharged_patients = models.PositiveIntegerField("pasien keluar")
+    deaths = models.PositiveIntegerField("pasien meninggal", default=0)
+    deaths_over_48h = models.PositiveIntegerField("meninggal >48 jam", default=0)
+    alos = models.DecimalField(max_digits=10, decimal_places=2)
+    bor = models.DecimalField(max_digits=10, decimal_places=2)
+    bto = models.DecimalField(max_digits=10, decimal_places=2)
+    toi = models.DecimalField(max_digits=10, decimal_places=2)
+    gdr = models.DecimalField(max_digits=10, decimal_places=2)
+    ndr = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ("room_name",)
+        constraints = [models.UniqueConstraint(fields=("source", "room_code"), name="unique_inpatient_room_source")]
+
+
+class VerifiedInpatientRoomIndicator(models.Model):
+    """Salinan hasil hitung DataHub per ruang untuk pemeriksaan internal."""
+    verification = models.ForeignKey(VerifiedInpatientIndicator, on_delete=models.CASCADE, related_name="room_indicators")
+    source_room = models.OneToOneField(InpatientRoomIndicatorSource, on_delete=models.PROTECT, related_name="verification")
+    alos = models.DecimalField(max_digits=10, decimal_places=2)
+    bor = models.DecimalField(max_digits=10, decimal_places=2)
+    bto = models.DecimalField(max_digits=10, decimal_places=2)
+    toi = models.DecimalField(max_digits=10, decimal_places=2)
+    gdr = models.DecimalField(max_digits=10, decimal_places=2)
+    ndr = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        ordering = ("source_room__room_name",)
 
 
 class MonthlyHealthIndicatorSource(models.Model):
@@ -272,11 +408,73 @@ class VerifiedMonthlyHealthIndicator(models.Model):
     def __str__(self):
         return f"Verifikasi indikator kesehatan {self.period:%B %Y}"
 
-    def to_payload(self):
-        """Bangun kontrak API dari tabel row; JSON bukan sumber operasional."""
+    def to_working_payload(self):
+        """Payload lengkap untuk verifikator; tidak menerapkan filter publikasi."""
         if not any((self.visit_rows.exists(), self.top_disease_rows.exists(), self.tourist_visit_rows.exists(), self.disease_group_rows.exists())):
-            # Kompatibilitas snapshot lama; migrasi produksi mengisi tabel row.
             return self.verified_data
+        return {
+            "hospital": {"code": self.source.hospital_code, "name": self.source.hospital_name},
+            "visits": [
+                {"installation": row.installation, "payment_status": row.payment_status, "count": row.count}
+                for row in self.visit_rows.all()
+            ],
+            "top_diseases": [
+                {"installation": row.installation, "icd10_code": row.icd10_code, "name": row.name, "patient_count": row.patient_count}
+                for row in self.top_disease_rows.all()
+            ],
+            "tourist_visits": [
+                {
+                    "category": row.category,
+                    "origin_code": row.origin_code,
+                    "origin": row.origin_raw or row.origin,
+                    "mapped_code": row.region.official_code if row.region else None,
+                    "mapped_name": row.region.name if row.region else None,
+                    "cleaning_method": row.cleaning_method,
+                    "mapping_status": (
+                        "Digabung sebagai Wisman" if row.category == "international"
+                        else "Dikecualikan — Kabupaten Lombok Tengah" if is_local_tourist_region(row.region)
+                        else "Dihitung sebagai Wisnus" if row.region
+                        else "Belum dikenali"
+                    ),
+                    "count": row.count,
+                }
+                for row in self.tourist_visit_rows.select_related("region")
+            ],
+            "disease_groups": [
+                {"code": row.code, "icd10_range": row.icd10_range, "patient_count": row.patient_count}
+                for row in self.disease_group_rows.all()
+            ],
+        }
+
+    def to_payload(self):
+        """Bangun kontrak API; domestik luar Lombok Tengah menjadi Wisnus."""
+        working = self.to_working_payload()
+        if not any((self.visit_rows.exists(), self.top_disease_rows.exists(), self.tourist_visit_rows.exists(), self.disease_group_rows.exists())):
+            return working
+        tourist_groups = {}
+        for row in self.tourist_visit_rows.select_related("region"):
+            if row.category == "international":
+                key = ("international", "all")
+                category_code, category_label = "wisman", "Wisatawan Mancanegara"
+                origin_id, origin_code, origin, is_clean = None, "INTL", "Luar Indonesia", True
+            elif not row.region_id or is_local_tourist_region(row.region):
+                # Domestik yang belum teridentifikasi belum dapat dipastikan berasal
+                # dari luar Lombok Tengah; simpan untuk cleaning tetapi jangan publikasikan.
+                continue
+            else:
+                key = ("domestic", f"region:{row.region_id}")
+                category_code, category_label = "wisnus", "Wisatawan Nusantara"
+                origin_id, origin_code, origin, is_clean = row.region_id, row.region.official_code, row.region.name, True
+            item = tourist_groups.setdefault(key, {
+                "category": category_code,
+                "category_label": category_label,
+                "origin_id": origin_id,
+                "origin_code": origin_code,
+                "origin": origin,
+                "is_clean": is_clean,
+                "count": 0,
+            })
+            item["count"] += row.count
         return {
             "hospital": {
                 "code": self.source.hospital_code,
@@ -290,15 +488,47 @@ class VerifiedMonthlyHealthIndicator(models.Model):
                 {"installation": row.installation, "icd10_code": row.icd10_code, "name": row.name, "patient_count": row.patient_count}
                 for row in self.top_disease_rows.all()
             ],
-            "tourist_visits": [
-                {"category": row.category, "origin": row.origin, "count": row.count}
-                for row in self.tourist_visit_rows.all()
-            ],
+            "tourist_visits": list(tourist_groups.values()),
             "disease_groups": [
                 {"code": row.code, "icd10_range": row.icd10_range, "patient_count": row.patient_count}
                 for row in self.disease_group_rows.all()
             ],
         }
+
+
+class HealthIndicatorVerification(models.Model):
+    """Keputusan verifikasi atomik untuk satu indikator pada satu periode."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Sedang diperiksa"
+        APPROVED = "approved", "Terverifikasi"
+        REJECTED = "rejected", "Ditolak"
+
+    record = models.ForeignKey(
+        VerifiedMonthlyHealthIndicator,
+        on_delete=models.CASCADE,
+        related_name="indicator_verifications",
+    )
+    indicator_code = models.CharField("indikator", max_length=40)
+    status = models.CharField(max_length=20, choices=Status, default=Status.DRAFT)
+    notes = models.TextField("catatan", blank=True)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-record__period", "indicator_code")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("record", "indicator_code"),
+                name="unique_health_indicator_verification",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.indicator_code} - {self.record.period:%B %Y}"
 
 
 class VerifiedHealthVisitRow(models.Model):
@@ -329,6 +559,10 @@ class VerifiedTouristVisitRow(models.Model):
     verification = models.ForeignKey(VerifiedMonthlyHealthIndicator, on_delete=models.CASCADE, related_name="tourist_visit_rows")
     category = models.CharField(max_length=20)
     origin = models.CharField(max_length=160)
+    origin_code = models.CharField("kode wilayah dari SIMRS", max_length=30, blank=True)
+    origin_raw = models.CharField("nama wilayah asli", max_length=160, blank=True)
+    region = models.ForeignKey(AdministrativeRegion, null=True, blank=True, on_delete=models.SET_NULL, related_name="tourist_visit_rows")
+    cleaning_method = models.CharField(max_length=20, choices=(("official_code", "Kode resmi"), ("exact_name", "Nama baku"), ("alias", "Alias"), ("unresolved", "Belum dikenali")), default="unresolved")
     count = models.PositiveIntegerField(default=0)
 
     class Meta:

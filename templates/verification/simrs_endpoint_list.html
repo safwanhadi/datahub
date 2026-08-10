@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Konfigurasi API SIMRS — DataHub{% endblock %}
+{% block heading %}Konfigurasi API SIMRS{% endblock %}
+{% block content %}
+<div class="notice"><strong>Alur sumber data:</strong> DataHub mengambil data dari endpoint SIMRS aktif, menyimpan snapshot sumber, menghitung ulang indikator, lalu menunggu persetujuan verifikator. Perubahan URL berlaku pada sinkronisasi berikutnya.</div>
+<section class="endpoint-summary">
+  <article><span>Endpoint dikonfigurasi</span><strong>{{ endpoints|length }}</strong><small>URL sumber tersimpan di database</small></article>
+  <article><span>Belum dikonfigurasi</span><strong>{{ missing_endpoints|length }}</strong><small>Kelompok data yang masih memerlukan URL</small></article>
+</section>
+<section class="panel">
+  <div class="panel-title page-toolbar"><div><h2>Endpoint sumber SIMRS</h2><p>Kelola alamat layanan yang menjadi sumber data verifikasi.</p></div><a class="button primary" href="{% url 'verification:simrs-endpoint-create' %}">+ Tambah endpoint SIMRS</a></div>
+  <div class="table-wrap"><table><thead><tr><th>Kelompok data</th><th>URL endpoint</th><th>Timeout</th><th>Status</th><th>Diperbarui</th><th class="right">Tindakan</th></tr></thead><tbody>
+  {% for item in endpoints %}<tr><td><strong>{{ item.name }}</strong><small>{{ item.get_code_display }} · <code>{{ item.code }}</code></small></td><td class="endpoint-url"><code>{{ item.url }}</code></td><td>{{ item.timeout_seconds }} detik</td><td><span class="badge {% if item.is_active %}approved{% else %}rejected{% endif %}">{% if item.is_active %}Aktif{% else %}Nonaktif{% endif %}</span></td><td>{{ item.updated_at|date:"d M Y H:i" }}<small>{% if item.updated_by %}oleh {{ item.updated_by.get_username }}{% endif %}</small></td><td class="right"><a class="button secondary small" href="{% url 'verification:simrs-endpoint-edit' item.pk %}">Ubah endpoint</a></td></tr>
+  {% empty %}<tr><td colspan="6" class="empty">Belum ada endpoint SIMRS yang dikonfigurasi.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% if missing_endpoints %}<section class="panel section-gap"><div class="panel-title"><div><h2>Konfigurasi yang belum lengkap</h2><p>Tambahkan URL untuk kelompok data berikut jika endpoint-nya disediakan SIMRS.</p></div></div><div class="missing-endpoints">
+  {% for item in missing_endpoints %}<div><span><strong>{{ item.name }}</strong><small><code>{{ item.code }}</code></small></span><a class="button secondary small" href="{% url 'verification:simrs-endpoint-create' %}?code={{ item.code|urlencode }}">Konfigurasikan</a></div>{% endfor %}
+</div></section>{% endif %}
+<section class="panel section-gap integration-guide"><div class="panel-title"><div><h2>Endpoint yang digunakan sistem</h2><p>Pemetaan konfigurasi dengan proses sinkronisasi saat ini.</p></div></div><div class="integration-flow"><div><strong>Endpoint SIMRS</strong><span><code>visits</code> · <code>top-diseases</code> · <code>tourist-visits</code> · <code>disease-groups</code></span><small>SIMRS menyediakan data per kelompok tanpa endpoint agregat.</small></div><b>→</b><div><strong>Agregasi & verifikasi DataHub</strong><span>Gabung, validasi, dan persetujuan</span><small>DataHub memastikan semua respons berasal dari rumah sakit yang sama.</small></div><b>→</b><div><strong>API internal/eksternal</strong><span>Data terverifikasi</span><small>Hanya hasil sesuai kebijakan akses yang dibagikan.</small></div></div><p class="data-note">Indikator rawat inap tetap menggunakan <code>inpatient-indicators</code>. Empat endpoint kesehatan digabung secara mandiri oleh DataHub pada setiap sinkronisasi.</p></section>
+{% endblock %}

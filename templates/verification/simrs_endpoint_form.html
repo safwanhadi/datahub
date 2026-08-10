@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{% if endpoint.pk %}Ubah Endpoint SIMRS{% else %}Tambah Endpoint SIMRS{% endif %} — DataHub{% endblock %}
+{% block heading %}{% if endpoint.pk %}Ubah endpoint SIMRS{% else %}Tambah endpoint SIMRS{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="management-form compact-form">{% csrf_token %}{{ form.non_field_errors }}
+  <section class="panel form-section"><div class="section-heading"><div><h2>Identitas endpoint</h2><p>Pilih kelompok data dan beri nama yang mudah dikenali administrator.</p></div></div><div class="form-grid">
+    <label>{{ form.code.label }}{{ form.code }}{{ form.code.errors }}<small>Satu kelompok data hanya dapat memiliki satu konfigurasi aktif di database.</small></label>
+    <label>{{ form.name.label }}{{ form.name }}{{ form.name.errors }}</label>
+  </div></section>
+  <section class="panel form-section"><div class="section-heading"><div><h2>Koneksi API</h2><p>Gunakan URL lengkap endpoint SIMRS. Token OAuth ditambahkan otomatis oleh sistem ketika sinkronisasi.</p></div></div><div class="form-grid">
+    <label class="full-row">{{ form.url.label }}{{ form.url }}{{ form.url.errors }}<small>Gunakan HTTPS pada production dan jangan menyertakan access token di URL.</small></label>
+    <label>{{ form.timeout_seconds.label }}{{ form.timeout_seconds }}{{ form.timeout_seconds.errors }}<small>Maksimal 300 detik.</small></label>
+    <label class="toggle-field">{{ form.is_active }}<span><strong>Endpoint aktif</strong><small>Endpoint dapat digunakan pada sinkronisasi berikutnya.</small></span>{{ form.is_active.errors }}</label>
+  </div></section>
+  <div class="form-actions"><a class="button secondary" href="{% url 'verification:simrs-endpoint-list' %}">Batal</a><button class="primary" type="submit">{% if endpoint.pk %}Simpan perubahan endpoint{% else %}Simpan endpoint SIMRS{% endif %}</button></div>
+</form>
+{% endblock %}

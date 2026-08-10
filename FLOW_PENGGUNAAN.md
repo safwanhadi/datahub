@@ -3,18 +3,18 @@
 ## 1. Tujuan
 
 SIMRS DataHub menjadi lapisan pemeriksaan antara SIMRS dan pihak ketiga. Database
-SIMRS tidak diakses oleh Django. Data diambil oleh aplikasi PHP `refrensi_app`,
-dikirim sebagai JSON, dihitung ulang oleh Django, diperiksa pegawai, kemudian
+SIMRS tidak diakses langsung oleh DataHub. Data diambil melalui API SIMRS,
+dikirim sebagai JSON, dihitung ulang oleh DataHub, diperiksa pegawai, kemudian
 dipublikasikan melalui API setelah disetujui.
 
 ## 2. Aliran Data Utama
 
 ```mermaid
 flowchart LR
-    A[(Database SIMRS)] -->|Query internal| B[PHP refrensi_app]
-    B -->|JSON + token server| C[Django DataHub]
+    A[(Database SIMRS)] -->|Query internal| B[API SIMRS]
+    B -->|JSON + token server| C[DataHub]
     C --> D[(Snapshot asli)]
-    C --> E[Perhitungan ulang Django]
+    C --> E[Perhitungan ulang DataHub]
     D --> F[(Salinan verifikasi)]
     E --> F
     F --> G{Pemeriksaan pegawai}
@@ -26,12 +26,12 @@ flowchart LR
     J -->|Bearer Token| K[Aplikasi pihak ketiga]
 ```
 
-Database SIMRS hanya berkomunikasi dengan PHP. Server Django tidak menyimpan
+Database SIMRS hanya berkomunikasi dengan layanan internal SIMRS. DataHub tidak menyimpan
 credential database SIMRS dan tidak membuka koneksi langsung ke database tersebut.
 
-## 3. Isi JSON dari PHP
+## 3. Isi JSON dari SIMRS
 
-PHP mengirimkan periode, data dasar, dan hasil perhitungan awal:
+SIMRS mengirimkan periode, data dasar, dan hasil perhitungan awal:
 
 ```json
 {
@@ -58,31 +58,31 @@ PHP mengirimkan periode, data dasar, dan hasil perhitungan awal:
 }
 ```
 
-Hasil perhitungan PHP disimpan sebagai pembanding dan tidak langsung
+Hasil perhitungan SIMRS disimpan sebagai pembanding dan tidak langsung
 dipublikasikan.
 
-## 4. Proses di Dalam Django
+## 4. Proses di Dalam DataHub
 
 ### 4.1 Penerimaan data
 
 1. Petugas memilih bulan laporan.
 2. Petugas menekan **Ambil dari SIMRS**.
-3. Django memanggil endpoint PHP dengan tanggal awal dan akhir bulan.
-4. PHP memvalidasi token server-to-server.
-5. PHP menjalankan query internal terhadap SIMRS.
-6. PHP mengirim respons JSON.
-7. Django memvalidasi struktur dan nilai data dasar.
+3. DataHub memanggil endpoint SIMRS dengan tanggal awal dan akhir bulan.
+4. SIMRS memvalidasi token server-to-server.
+5. SIMRS menjalankan query internal.
+6. SIMRS mengirim respons JSON.
+7. DataHub memvalidasi struktur dan nilai data dasar.
 
 Jika koneksi gagal atau struktur JSON tidak sesuai, data tidak dibuat dan petugas
 mendapatkan pesan kesalahan.
 
 ### 4.2 Penyimpanan snapshot asli
 
-Django menyimpan:
+DataHub menyimpan:
 
 - Periode laporan
 - Data dasar dari SIMRS
-- Enam nilai hasil perhitungan PHP
+- Enam nilai hasil perhitungan SIMRS
 - Respons JSON asli
 - Pengguna yang mengambil data
 - Waktu pengambilan
@@ -91,7 +91,7 @@ Snapshot ini merupakan bukti data awal dan tidak dapat diedit oleh verifikator.
 
 ### 4.3 Perhitungan ulang
 
-Django menghitung indikator hanya dari data dasar:
+DataHub menghitung indikator hanya dari data dasar:
 
 | Indikator | Rumus |
 |---|---|
@@ -102,16 +102,16 @@ Django menghitung indikator hanya dari data dasar:
 | GDR | Pasien meninggal ÷ pasien keluar × 1.000 |
 | NDR | Meninggal lebih dari 48 jam ÷ pasien keluar × 1.000 |
 
-Nilai hasil PHP dan hasil Django disimpan di kolom yang berbeda. Selisih keduanya
+Nilai hasil SIMRS dan hasil DataHub disimpan di kolom yang berbeda. Selisih keduanya
 dapat dilihat saat pemeriksaan.
 
 ### 4.4 Pembuatan salinan verifikasi
 
-Setelah perhitungan selesai, Django membuat salinan verifikasi. Nilai awal salinan
-berasal dari hasil hitung Django, bukan dari nilai hasil hitung PHP.
+Setelah perhitungan selesai, DataHub membuat salinan verifikasi. Nilai awal salinan
+berasal dari hasil hitung DataHub, bukan dari nilai hasil hitung SIMRS.
 
-Pegawai hanya mengubah salinan verifikasi. Snapshot asli, data dasar, hasil PHP,
-dan hasil hitung Django tidak berubah.
+Pegawai hanya mengubah salinan verifikasi. Snapshot asli, data dasar, hasil SIMRS,
+dan hasil hitung DataHub tidak berubah.
 
 ## 5. Flow Pengguna
 
@@ -148,7 +148,7 @@ Petugas tidak perlu membuka atau menulis JSON.
 3. Memilih periode dengan status **Sedang diperiksa**.
 4. Menekan **Periksa**.
 5. Memeriksa data dasar dari SIMRS.
-6. Membandingkan nilai PHP dengan nilai hitung Django.
+6. Membandingkan nilai SIMRS dengan nilai hitung DataHub.
 7. Memeriksa enam kolom hasil verifikasi.
 8. Jika belum selesai, menekan **Simpan draf**.
 9. Jika ada koreksi, mengubah nilai dan menulis alasan pada kolom catatan.
@@ -164,7 +164,7 @@ Setiap perubahan, pengguna, dan waktu perubahan dicatat dalam audit trail.
 3. Pihak ketiga memanggil salah satu endpoint DataHub dengan Bearer Token.
 4. DataHub mengintrospeksi token kepada SIMADU.
 5. DataHub memeriksa `active`, `exp`, `client_id`, dan scope.
-6. Django mengambil data dari tabel hasil verifikasi.
+6. DataHub mengambil data dari tabel hasil verifikasi.
 7. Hanya periode berstatus **Terverifikasi** yang dikembalikan.
 
 Contoh:
@@ -193,7 +193,7 @@ stateDiagram-v2
 
 ## 7. Penanganan Perbedaan Nilai
 
-Jika hasil PHP dan Django berbeda:
+Jika hasil SIMRS dan DataHub berbeda:
 
 1. Jangan langsung menyetujui data.
 2. Periksa data dasar dan jumlah hari periode.
@@ -210,8 +210,8 @@ untuk audit.
 
 Jika periode yang sama diambil kembali:
 
-- Snapshot sumber diperbarui dengan respons PHP terbaru.
-- Perhitungan Django dijalankan kembali.
+- Snapshot sumber diperbarui dengan respons SIMRS terbaru.
+- Perhitungan DataHub dijalankan kembali.
 - Hasil verifikasi yang sudah dibuat tidak ditimpa otomatis.
 - Verifikator perlu menilai apakah perubahan sumber membutuhkan verifikasi ulang.
 
@@ -220,14 +220,14 @@ terverifikasi sebaiknya dilakukan oleh administrator atau petugas berwenang.
 
 ## 9. Batas Keamanan
 
-- Endpoint PHP menggunakan HTTPS.
-- Endpoint PHP menggunakan opaque token SIMADU dengan scope
+- Endpoint SIMRS menggunakan HTTPS.
+- Endpoint SIMRS menggunakan opaque token SIMADU dengan scope
   `simrs.indicators.read`.
-- Endpoint PHP sebaiknya hanya menerima IP server Django.
+- Endpoint SIMRS sebaiknya hanya menerima IP server DataHub.
 - JSON tidak memuat credential database.
 - JSON enam indikator sebaiknya hanya memuat data agregat, bukan identitas pasien.
-- Token API publik memiliki client dan scope berbeda dari token antara Django
-  dan PHP.
+- Token API publik memiliki client dan scope berbeda dari token integrasi antara
+  DataHub dan SIMRS.
 - DataHub memvalidasi token pihak ketiga melalui introspection SIMADU dengan
   cache maksimal 60 detik.
 - Token tidak ditulis di source code atau log aplikasi.
@@ -238,8 +238,8 @@ terverifikasi sebaiknya dilakukan oleh administrator atau petugas berwenang.
 | Komponen/Pengguna | Tanggung jawab |
 |---|---|
 | SIMRS | Menyimpan data operasional rumah sakit |
-| PHP `refrensi_app` | Query internal dan menyediakan JSON agregat |
-| Django DataHub | Arsip, hitung ulang, salinan verifikasi, audit, dan API |
+| SIMRS | Query internal dan menyediakan JSON agregat |
+| DataHub | Arsip, hitung ulang, salinan verifikasi, audit, dan API |
 | Petugas Data | Mengambil data sesuai periode |
 | Verifikator | Memeriksa, mengoreksi, mencatat alasan, dan menyetujui |
 | Administrator | Akun, izin, konfigurasi, dan token |

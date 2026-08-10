@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{% if region.pk %}Ubah Wilayah{% else %}Tambah Wilayah{% endif %} — DataHub{% endblock %}
+{% block heading %}{% if region.pk %}Ubah wilayah{% else %}Tambah wilayah{% endif %}{% endblock %}
+{% block content %}
+<form method="post" class="management-form">{% csrf_token %}{{ form.non_field_errors }}
+  <section class="panel form-section"><div class="section-heading"><div><h2>Identitas wilayah baku</h2><p>Gunakan kode resmi sebagai identitas permanen untuk filter dan API.</p></div></div><div class="form-grid">
+    <label>{{ form.official_code.label }}{{ form.official_code }}{{ form.official_code.errors }}</label><label>{{ form.name.label }}{{ form.name }}{{ form.name.errors }}</label>
+    <label>{{ form.region_type.label }}{{ form.region_type }}{{ form.region_type.errors }}</label><label>{{ form.parent.label }}{{ form.parent }}{{ form.parent.errors }}</label>
+    <label>{{ form.island_group.label }}{{ form.island_group }}{{ form.island_group.errors }}<small>Contoh: Lombok. Dipakai untuk agregasi lintas kabupaten/kota.</small></label><label class="toggle-field">{{ form.is_active }}<span><strong>Wilayah aktif</strong><small>Dapat digunakan untuk normalisasi data baru.</small></span>{{ form.is_active.errors }}</label>
+  </div></section>
+  <section class="panel form-section"><div class="section-heading"><div><h2>Alias dari SIMRS</h2><p>Masukkan seluruh variasi nama yang harus digabung ke wilayah ini.</p></div></div>
+    {{ formset.management_form }}{{ formset.non_form_errors }}
+    <div class="alias-list" id="alias-formset">{% for alias_form in formset %}<div class="alias-row">{% for hidden in alias_form.hidden_fields %}{{ hidden }}{% endfor %}<label>Nama/alias{{ alias_form.alias }}{{ alias_form.alias.errors }}</label><label>Sistem sumber{{ alias_form.source_system }}{{ alias_form.source_system.errors }}</label><label class="check-label">{{ alias_form.is_active }} Aktif</label><label class="delete-grant">{{ alias_form.DELETE }} Hapus</label></div>{% endfor %}</div>
+    <template id="empty-alias-form"><div class="alias-row">{% with alias_form=formset.empty_form %}{% for hidden in alias_form.hidden_fields %}{{ hidden }}{% endfor %}<label>Nama/alias{{ alias_form.alias }}</label><label>Sistem sumber{{ alias_form.source_system }}</label><label class="check-label">{{ alias_form.is_active }} Aktif</label><label class="delete-grant">{{ alias_form.DELETE }} Hapus</label>{% endwith %}</div></template>
+    <button class="button secondary add-grant" id="add-alias" type="button">+ Tambah alias</button>
+  </section>
+  <div class="form-actions"><a class="button secondary" href="{% url 'verification:region-list' %}">Batal</a><button class="primary" type="submit">Simpan wilayah &amp; alias</button></div>
+</form>
+<script>(()=>{const list=document.querySelector("#alias-formset"),total=document.querySelector("#id_aliases-TOTAL_FORMS"),template=document.querySelector("#empty-alias-form");document.querySelector("#add-alias").addEventListener("click",()=>{const index=Number(total.value);list.insertAdjacentHTML("beforeend",template.innerHTML.replaceAll("__prefix__",index));total.value=index+1;});})();</script>
+{% endblock %}

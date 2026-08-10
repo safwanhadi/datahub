@@ -1,4 +1,3 @@
-from django.conf import settings
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 
@@ -8,14 +7,11 @@ class SimaduOpaqueTokenScheme(OpenApiAuthenticationExtension):
 
     def get_security_definition(self, auto_schema):
         return {
-            "type": "oauth2",
-            "description": "Opaque access token yang diterbitkan SIMADU.",
-            "flows": {
-                "clientCredentials": {
-                    "tokenUrl": settings.SIMADU_TOKEN_URL,
-                    "scopes": {
-                        "read:dash": "Membaca API terverifikasi DataHub",
-                    },
-                }
-            },
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "Opaque token SIMADU",
+            "description": (
+                "Tempel access_token yang diterbitkan SIMADU. Token dapat "
+                "diambil melalui Postman menggunakan grant client_credentials."
+            ),
         }
