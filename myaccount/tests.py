@@ -76,6 +76,29 @@ class AccountProfileTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    def test_pending_profile_cannot_read_dashboard(self):
+        user = get_user_model().objects.create_user(username="pending-user", password="secret")
+        AccountProfile.objects.create(
+            user=user, simadu_subject="official-pending", is_simadu_official=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("verification:dashboard"))
+
+        self.assertRedirects(response, reverse("myaccount:detail"))
+
+    def test_approved_profile_can_read_dashboard(self):
+        user = get_user_model().objects.create_user(username="approved-user", password="secret")
+        AccountProfile.objects.create(
+            user=user, simadu_subject="official-approved", is_simadu_official=True,
+            access_status=AccountProfile.AccessStatus.APPROVED,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("verification:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+
 
 @override_settings(
     SECURE_SSL_REDIRECT=False,
@@ -136,7 +159,7 @@ class SimaduSSOTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("verification:dashboard"),
+            reverse("myaccount:detail"),
             fetch_redirect_response=False,
         )
         expected_subject = "nik:" + hashlib.sha256(
@@ -149,7 +172,8 @@ class SimaduSSOTests(TestCase):
         self.assertEqual(profile.user.email, "pegawai@example.com")
         self.assertEqual(int(self.client.session["_auth_user_id"]), profile.user.pk)
         self.assertTrue(profile.is_simadu_official)
-        self.assertTrue(profile.user.groups.filter(name="Pembaca").exists())
+        self.assertEqual(profile.access_status, AccountProfile.AccessStatus.PENDING)
+        self.assertFalse(profile.user.groups.exists())
         exchange_mock.assert_called_once()
         userinfo_mock.assert_called_once_with("opaque-token")
 
@@ -167,7 +191,7 @@ class SimaduSSOTests(TestCase):
 
     @patch("myaccount.views.fetch_userinfo")
     @patch("myaccount.views.exchange_code")
-    def test_callback_rejects_non_official_without_creating_user(self, exchange_mock, userinfo_mock):
+    def test_callback_records_rejected_non_official(self, exchange_mock, userinfo_mock):
         exchange_mock.return_value = "opaque-token"
         userinfo_mock.return_value = {"nik": "5202000000000001", "email": "biasa@example.com", "pejabat": False}
         login_response = self.client.get(reverse("myaccount:simadu-login"))
@@ -176,7 +200,9 @@ class SimaduSSOTests(TestCase):
         response = self.client.get(reverse("myaccount:simadu-callback"), {"code": "authorization-code", "state": state})
 
         self.assertRedirects(response, reverse("login"))
-        self.assertFalse(get_user_model().objects.filter(email="biasa@example.com").exists())
+        user = get_user_model().objects.get(email="biasa@example.com")
+        self.assertEqual(user.account_profile.access_status, AccountProfile.AccessStatus.REJECTED)
+        self.assertFalse(user.account_profile.is_simadu_official)
 
     @patch("myaccount.views.fetch_userinfo")
     @patch("myaccount.views.exchange_code")
@@ -184,7 +210,10 @@ class SimaduSSOTests(TestCase):
         from django.contrib.auth.models import Group
 
         user = get_user_model().objects.create_user("pejabat")
-        AccountProfile.objects.create(user=user, simadu_subject="official-1")
+        AccountProfile.objects.create(
+            user=user, simadu_subject="official-1",
+            access_status=AccountProfile.AccessStatus.APPROVED,
+        )
         verifier = Group.objects.get(name="Verifikator")
         user.groups.add(verifier)
         exchange_mock.return_value = "opaque-token"

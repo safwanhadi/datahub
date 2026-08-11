@@ -22,6 +22,8 @@
     </div>
     <div class="form-grid">
       <div class="field-group full-row"><span class="field-label">{{ form.roles.label }}</span>{{ form.roles }}{{ form.roles.errors }}</div>
+      <label>{{ form.access_status.label }}{{ form.access_status }}{{ form.access_status.errors }}</label>
+      <label class="full-row">{{ form.access_notes.label }}{{ form.access_notes }}{{ form.access_notes.errors }}</label>
       <label class="full-row">{{ form.new_password.label }}{{ form.new_password }}{{ form.new_password.errors }}<small>{{ form.new_password.help_text }}</small></label>
       <label class="toggle-field full-row">{{ form.is_active }}<span><strong>Akun aktif</strong><small>Pengguna dapat masuk dan mengakses DataHub sesuai perannya.</small></span>{{ form.is_active.errors }}</label>
     </div>

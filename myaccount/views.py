@@ -6,7 +6,6 @@ from hmac import compare_digest
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
-from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
@@ -109,7 +108,7 @@ def _unique_username(base):
 
 
 @transaction.atomic
-def _resolve_user(claims):
+def _resolve_user(claims, *, is_official=True):
     subject = _subject_from_claims(claims)
     if not subject:
         raise SimaduSSOError(
@@ -156,14 +155,16 @@ def _resolve_user(claims):
             changed_fields.append(field)
     if changed_fields:
         user.save(update_fields=changed_fields)
-    profile.is_simadu_official = True
+    profile.is_simadu_official = is_official
     profile.official_status_checked_at = timezone.now()
-    profile.save(update_fields=("is_simadu_official", "official_status_checked_at", "updated_at"))
-    # Pejabat baru/default hanya membaca. Role yang telah ditetapkan admin
-    # tidak dihapus atau ditimpa saat login ulang.
-    if not user.groups.exists():
-        reader_group, _ = Group.objects.get_or_create(name="Pembaca")
-        user.groups.add(reader_group)
+    profile.last_sso_attempt_at = timezone.now()
+    if not is_official:
+        profile.access_status = AccountProfile.AccessStatus.REJECTED
+        profile.access_notes = "Status pejabat tidak valid berdasarkan profil SIMADU."
+    profile.save(update_fields=(
+        "is_simadu_official", "official_status_checked_at", "last_sso_attempt_at",
+        "access_status", "access_notes", "updated_at",
+    ))
     return user
 
 
@@ -190,9 +191,10 @@ def simadu_callback(request):
     try:
         token = exchange_code(code, verifier)
         claims = fetch_userinfo(token)
-        if not _is_simadu_official(claims):
+        is_official = _is_simadu_official(claims)
+        user = _resolve_user(claims, is_official=is_official)
+        if not is_official:
             raise SimaduSSOError("Akses DataHub hanya tersedia untuk pejabat yang terdaftar di SIMADU.")
-        user = _resolve_user(claims)
     except (SimaduSSOError, ImproperlyConfigured) as exc:
         messages.error(request, str(exc))
         return redirect(settings.LOGIN_URL)
@@ -202,6 +204,8 @@ def simadu_callback(request):
         return redirect(settings.LOGIN_URL)
 
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    if not user.account_profile.has_datahub_access:
+        return redirect("myaccount:detail")
     return redirect(next_url)
 
 
@@ -241,7 +245,17 @@ def user_edit(request, pk=None):
             form.add_error("roles", "Anda tidak dapat menghapus peran administrator dari akun sendiri.")
         else:
             saved_user = form.save()
-            AccountProfile.objects.get_or_create(user=saved_user)
+            profile, _ = AccountProfile.objects.get_or_create(user=saved_user)
+            old_status = profile.access_status
+            profile.access_status = (
+                form.cleaned_data.get("access_status")
+                or AccountProfile.AccessStatus.APPROVED
+            )
+            profile.access_notes = form.cleaned_data["access_notes"]
+            if old_status != profile.access_status:
+                profile.reviewed_at = timezone.now()
+                profile.reviewed_by = request.user
+            profile.save()
             messages.success(request, "Akun pengguna berhasil disimpan.")
             return redirect("myaccount:user-list")
     return render(request, "myaccount/user_form.html", {"form": form, "managed_user": user})
