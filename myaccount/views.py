@@ -158,12 +158,9 @@ def _resolve_user(claims, *, is_official=True):
     profile.is_simadu_official = is_official
     profile.official_status_checked_at = timezone.now()
     profile.last_sso_attempt_at = timezone.now()
-    if not is_official:
-        profile.access_status = AccountProfile.AccessStatus.REJECTED
-        profile.access_notes = "Status pejabat tidak valid berdasarkan profil SIMADU."
     profile.save(update_fields=(
         "is_simadu_official", "official_status_checked_at", "last_sso_attempt_at",
-        "access_status", "access_notes", "updated_at",
+        "updated_at",
     ))
     return user
 
@@ -193,8 +190,6 @@ def simadu_callback(request):
         claims = fetch_userinfo(token)
         is_official = _is_simadu_official(claims)
         user = _resolve_user(claims, is_official=is_official)
-        if not is_official:
-            raise SimaduSSOError("Akses DataHub hanya tersedia untuk pejabat yang terdaftar di SIMADU.")
     except (SimaduSSOError, ImproperlyConfigured) as exc:
         messages.error(request, str(exc))
         return redirect(settings.LOGIN_URL)
