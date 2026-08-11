@@ -58,15 +58,15 @@ class AccountProfileTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
 
-    def test_existing_non_official_sso_session_is_revoked(self):
+    def test_non_official_sso_user_is_limited_by_approval_status(self):
         user = get_user_model().objects.create_user(username="ordinary-sso", password="secret")
         AccountProfile.objects.create(user=user, simadu_subject="ordinary-1", is_simadu_official=False)
         self.client.force_login(user)
 
         response = self.client.get(reverse("verification:dashboard"))
 
-        self.assertRedirects(response, reverse("login"), fetch_redirect_response=False)
-        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertRedirects(response, reverse("myaccount:detail"))
+        self.assertIn("_auth_user_id", self.client.session)
 
     def test_local_user_is_not_affected_by_simadu_gate(self):
         user = get_user_model().objects.create_user(username="local-user", password="secret")
@@ -191,7 +191,7 @@ class SimaduSSOTests(TestCase):
 
     @patch("myaccount.views.fetch_userinfo")
     @patch("myaccount.views.exchange_code")
-    def test_callback_records_rejected_non_official(self, exchange_mock, userinfo_mock):
+    def test_callback_records_non_official_as_pending(self, exchange_mock, userinfo_mock):
         exchange_mock.return_value = "opaque-token"
         userinfo_mock.return_value = {"nik": "5202000000000001", "email": "biasa@example.com", "pejabat": False}
         login_response = self.client.get(reverse("myaccount:simadu-login"))
@@ -199,9 +199,9 @@ class SimaduSSOTests(TestCase):
 
         response = self.client.get(reverse("myaccount:simadu-callback"), {"code": "authorization-code", "state": state})
 
-        self.assertRedirects(response, reverse("login"))
+        self.assertRedirects(response, reverse("myaccount:detail"), fetch_redirect_response=False)
         user = get_user_model().objects.get(email="biasa@example.com")
-        self.assertEqual(user.account_profile.access_status, AccountProfile.AccessStatus.REJECTED)
+        self.assertEqual(user.account_profile.access_status, AccountProfile.AccessStatus.PENDING)
         self.assertFalse(user.account_profile.is_simadu_official)
 
     @patch("myaccount.views.fetch_userinfo")

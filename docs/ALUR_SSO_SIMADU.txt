@@ -39,9 +39,10 @@ ALUR
    persetujuan atau langsung menerbitkan authorization code sesuai kebijakan.
 7. SIMADU mengembalikan browser ke /accounts/callback/ DataHub.
 8. DataHub memvalidasi state, menukar code dengan token, lalu membaca api/me.
-9. DataHub hanya menerima pengguna dengan pejabat=true.
-10. Pejabat tanpa role khusus otomatis menjadi Pembaca.
-11. Pegawai diarahkan ke halaman Ringkasan DataHub.
+9. DataHub mencatat identitas dan status pejabat dari profil SIMADU.
+10. Pengguna baru berstatus menunggu persetujuan dan belum mendapat role.
+11. Administrator menyetujui pengguna sekaligus menetapkan role DataHub.
+12. Sebelum disetujui, pengguna hanya dapat melihat halaman status akun.
 
 KONFIGURASI MENU/APLIKASI DI SIMADU
 
