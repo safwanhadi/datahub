@@ -8,6 +8,9 @@
   <h2>{{ request.user.get_full_name|default:request.user.username }}</h2>
   <p>{{ request.user.email|default:"Email belum tersedia" }}</p>
   {% if request.user.account_profile.simadu_subject %}<p><strong>Status SIMADU:</strong> {% if request.user.account_profile.is_simadu_official %}Pejabat{% else %}Bukan pejabat{% endif %}</p>{% endif %}
+  <p><strong>Status akses:</strong> {{ request.user.account_profile.get_access_status_display }}</p>
+  {% if request.user.account_profile.access_status == 'pending' %}<p>Identitas Anda sudah tercatat. Administrator DataHub perlu menyetujui akses dan menetapkan peran sebelum Anda dapat membaca data.</p>{% endif %}
+  {% if request.user.account_profile.access_notes %}<p><strong>Catatan:</strong> {{ request.user.account_profile.access_notes }}</p>{% endif %}
   <p><strong>Role DataHub:</strong> {% for group in request.user.groups.all %}{{ group.name }}{% if not forloop.last %}, {% endif %}{% empty %}Belum ditetapkan{% endfor %}</p>
 </section>
 {% endblock %}
