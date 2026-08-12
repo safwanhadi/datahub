@@ -3,7 +3,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import SimrsApiEndpoint
+from .models import AdministrativeRegion, SimrsApiEndpoint
 
 
 class SimrsEndpointManagementTests(TestCase):
@@ -66,3 +66,30 @@ class SimrsEndpointManagementTests(TestCase):
         self.client.force_login(reader)
         self.assertEqual(self.client.get(reverse("verification:indicators")).status_code, 302)
         self.assertEqual(self.client.get(reverse("verification:dashboard")).status_code, 200)
+
+    def test_verifier_can_manage_region_mapping(self):
+        verifier = get_user_model().objects.create_user("region-verifier", password="secret")
+        verifier.groups.add(Group.objects.get(name="Verifikator"))
+        self.client.force_login(verifier)
+
+        response = self.client.get(reverse("verification:region-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Master Wilayah")
+
+        response = self.client.post(reverse("verification:region-create"), {
+            "official_code": "ID-TEST",
+            "name": "Wilayah Uji",
+            "region_type": AdministrativeRegion.RegionType.OTHER,
+            "is_active": "on",
+            "aliases-TOTAL_FORMS": "0",
+            "aliases-INITIAL_FORMS": "0",
+            "aliases-MIN_NUM_FORMS": "0",
+            "aliases-MAX_NUM_FORMS": "1000",
+        })
+
+        self.assertRedirects(response, reverse("verification:region-list"))
+        self.assertTrue(AdministrativeRegion.objects.filter(official_code="ID-TEST").exists())
+
+    def test_user_without_region_permission_cannot_open_mapping(self):
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get(reverse("verification:region-list")).status_code, 403)

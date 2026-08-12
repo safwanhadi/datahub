@@ -339,6 +339,8 @@ class UserRoleTests(TestCase):
         self.assertTrue(operator.permissions.filter(codename="change_simrsapiendpoint").exists())
         self.assertFalse(operator.permissions.filter(codename="approve_verifiedinpatientindicator").exists())
         self.assertTrue(verifier.permissions.filter(codename="approve_verifiedinpatientindicator").exists())
+        self.assertTrue(verifier.permissions.filter(codename="change_administrativeregion").exists())
+        self.assertTrue(verifier.permissions.filter(codename="change_regionalias").exists())
         self.assertFalse(verifier.permissions.filter(codename="add_inpatientindicatorsource").exists())
         self.assertTrue(administrator.permissions.filter(codename="add_inpatientindicatorsource").exists())
         self.assertTrue(administrator.permissions.filter(codename="approve_verifiedinpatientindicator").exists())
