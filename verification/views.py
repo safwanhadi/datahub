@@ -212,7 +212,7 @@ def indicator_standard_edit(request, pk=None):
     return render(request, "verification/standard_form.html", {"form": form, "standard": standard})
 
 
-@datahub_admin_required
+@permission_required("verification.view_administrativeregion", raise_exception=True)
 def region_list(request):
     regions = AdministrativeRegion.objects.select_related("parent").prefetch_related("aliases")
     query = request.GET.get("q", "").strip()
@@ -237,9 +237,15 @@ def region_list(request):
     })
 
 
-@datahub_admin_required
 @transaction.atomic
 def region_edit(request, pk=None):
+    required_permission = (
+        "verification.change_administrativeregion"
+        if pk
+        else "verification.add_administrativeregion"
+    )
+    if not request.user.is_authenticated or not request.user.has_perm(required_permission):
+        raise PermissionDenied
     region = get_object_or_404(AdministrativeRegion, pk=pk) if pk else AdministrativeRegion()
     form = AdministrativeRegionForm(request.POST or None, instance=region)
     formset = RegionAliasFormSet(request.POST or None, instance=region)
