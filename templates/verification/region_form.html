@@ -4,7 +4,7 @@
 {% block heading %}{% if region.pk %}Ubah wilayah{% else %}Tambah wilayah{% endif %}{% endblock %}
 {% block content %}
 <form method="post" class="management-form">{% csrf_token %}{{ form.non_field_errors }}
-  <section class="panel form-section"><div class="section-heading"><div><h2>Identitas wilayah baku</h2><p>Gunakan kode resmi sebagai identitas permanen untuk filter dan API.</p></div></div><div class="form-grid">
+  <section class="panel form-section" data-region-search-url="{% url 'verification:canonical-region-suggestions' %}" data-current-region-id="{{ region.pk|default:'' }}"><div class="section-heading"><div><h2>Identitas wilayah baku</h2><p>Cari berdasarkan kode atau nama. Memilih wilayah yang sudah tersedia akan membuka data wilayah tersebut agar tidak terjadi duplikasi.</p></div></div><div class="form-grid">
     <label>{{ form.official_code.label }}{{ form.official_code }}{{ form.official_code.errors }}</label><label>{{ form.name.label }}{{ form.name }}{{ form.name.errors }}</label>
     <label>{{ form.region_type.label }}{{ form.region_type }}{{ form.region_type.errors }}</label><label>{{ form.parent.label }}{{ form.parent }}{{ form.parent.errors }}</label>
     <label>{{ form.island_group.label }}{{ form.island_group }}{{ form.island_group.errors }}<small>Contoh: Lombok. Dipakai untuk agregasi lintas kabupaten/kota.</small></label><label class="toggle-field">{{ form.is_active }}<span><strong>Wilayah aktif</strong><small>Dapat digunakan untuk normalisasi data baru.</small></span>{{ form.is_active.errors }}</label>
@@ -41,6 +41,39 @@
         noResults: () => "Wilayah tidak ditemukan",
         searching: () => "Mencari...",
       },
+    });
+    const regionSection = document.querySelector("[data-region-search-url]");
+    const regionSearchUrl = regionSection.dataset.regionSearchUrl;
+    const currentRegionId = regionSection.dataset.currentRegionId;
+    $(".js-canonical-region").each(function () {
+      const element = this;
+      $(element).select2({
+        tags: true,
+        minimumInputLength: 2,
+        placeholder: element.dataset.placeholder,
+        width: "100%",
+        ajax: {
+          url: regionSearchUrl,
+          dataType: "json",
+          delay: 250,
+          data: (params) => ({q: params.term || "", field: element.dataset.searchField}),
+          processResults: (data) => data,
+        },
+        createTag: (params) => {
+          const value = params.term.trim();
+          return value ? {id: value, text: `${value} (nilai baru)`, newTag: true} : null;
+        },
+        language: {
+          inputTooShort: (args) => `Ketik ${args.minimum - args.input.length} karakter lagi`,
+          noResults: () => "Wilayah tidak ditemukan; nilai baru tetap dapat diketik",
+          searching: () => "Mencari master wilayah...",
+        },
+      }).on("select2:select", (event) => {
+        const selected = event.params.data;
+        if (selected.region_id && String(selected.region_id) !== currentRegionId) {
+          window.location.assign(selected.edit_url);
+        }
+      });
     });
     const aliasUrl = document.querySelector("[data-alias-suggestions-url]").dataset.aliasSuggestionsUrl;
     const initializeAliasSelect = (element) => {

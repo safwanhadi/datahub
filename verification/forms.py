@@ -14,6 +14,16 @@ class AdministrativeRegionForm(forms.ModelForm):
         model = AdministrativeRegion
         fields = ("official_code", "name", "region_type", "parent", "island_group", "is_active")
         widgets = {
+            "official_code": forms.Select(attrs={
+                "class": "js-canonical-region",
+                "data-search-field": "code",
+                "data-placeholder": "Cari kode atau nama wilayah",
+            }),
+            "name": forms.Select(attrs={
+                "class": "js-canonical-region",
+                "data-search-field": "name",
+                "data-placeholder": "Cari nama atau kode wilayah",
+            }),
             "parent": forms.Select(attrs={
                 "class": "js-region-parent",
                 "data-placeholder": "Cari kode atau nama wilayah induk",
@@ -22,6 +32,12 @@ class AdministrativeRegionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        submitted_code = self.data.get(self.add_prefix("official_code"), "").strip() if self.is_bound else ""
+        submitted_name = self.data.get(self.add_prefix("name"), "").strip() if self.is_bound else ""
+        code = submitted_code or (self.instance.official_code if self.instance and self.instance.pk else "")
+        name = submitted_name or (self.instance.name if self.instance and self.instance.pk else "")
+        self.fields["official_code"].widget.choices = [(code, code)] if code else []
+        self.fields["name"].widget.choices = [(name, name)] if name else []
         selected_type = self.data.get("region_type") if self.is_bound else getattr(self.instance, "region_type", "")
         parent_types = {
             "province": (),

@@ -267,6 +267,26 @@ def region_alias_suggestions(request):
     return JsonResponse({"results": results})
 
 
+@permission_required("verification.view_administrativeregion", raise_exception=True)
+def canonical_region_suggestions(request):
+    """Pencarian server-side master wilayah untuk field kode dan nama baku."""
+    query = request.GET.get("q", "").strip()
+    value_field = request.GET.get("field", "code")
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+    regions = AdministrativeRegion.objects.filter(
+        Q(official_code__icontains=query) | Q(name__icontains=query),
+        is_active=True,
+    ).order_by("name")[:30]
+    results = [{
+        "id": region.name if value_field == "name" else region.official_code,
+        "text": f"{region.name} ({region.official_code})",
+        "region_id": region.pk,
+        "edit_url": reverse("verification:region-edit", args=[region.pk]),
+    } for region in regions]
+    return JsonResponse({"results": results})
+
+
 @transaction.atomic
 def region_edit(request, pk=None):
     required_permission = (

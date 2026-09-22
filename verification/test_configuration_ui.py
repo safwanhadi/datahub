@@ -115,6 +115,31 @@ class SimrsEndpointManagementTests(TestCase):
         self.assertContains(response, reverse("verification:region-alias-suggestions"))
         self.assertContains(response, "Nilai tetap disimpan sebagai teks")
 
+    def test_region_identity_fields_use_searchable_master_suggestions(self):
+        verifier = get_user_model().objects.create_user("canonical-select2", password="secret")
+        verifier.groups.add(Group.objects.get(name="Verifikator"))
+        self.client.force_login(verifier)
+        response = self.client.get(reverse("verification:region-create"))
+        self.assertContains(response, 'data-search-field="code"')
+        self.assertContains(response, 'data-search-field="name"')
+        self.assertContains(response, reverse("verification:canonical-region-suggestions"))
+        self.assertContains(response, "Memilih wilayah yang sudah tersedia")
+
+    def test_canonical_region_suggestions_search_code_and_name(self):
+        region = AdministrativeRegion.objects.create(
+            official_code="52.02", name="Kabupaten Lombok Tengah", region_type="regency"
+        )
+        self.client.force_login(self.admin)
+        by_name = self.client.get(
+            reverse("verification:canonical-region-suggestions"), {"q": "Lombok Tengah", "field": "name"}
+        ).json()["results"]
+        by_code = self.client.get(
+            reverse("verification:canonical-region-suggestions"), {"q": "52.02", "field": "code"}
+        ).json()["results"]
+        self.assertEqual(by_name[0]["id"], region.name)
+        self.assertEqual(by_code[0]["id"], region.official_code)
+        self.assertEqual(by_code[0]["edit_url"], reverse("verification:region-edit", args=[region.pk]))
+
     def test_alias_suggestions_only_use_unmapped_domestic_simrs_values(self):
         region = AdministrativeRegion.objects.create(
             official_code="52.02", name="Kabupaten Lombok Tengah", region_type="regency"

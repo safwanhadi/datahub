@@ -15,6 +15,7 @@ urlpatterns = [
     path("konfigurasi-simrs/<int:pk>/ubah/", views.simrs_endpoint_edit, name="simrs-endpoint-edit"),
     path("master-wilayah/", views.region_list, name="region-list"),
     path("master-wilayah/saran-alias/", views.region_alias_suggestions, name="region-alias-suggestions"),
+    path("master-wilayah/cari-wilayah-baku/", views.canonical_region_suggestions, name="canonical-region-suggestions"),
     path("master-wilayah/tambah/", views.region_edit, name="region-create"),
     path("master-wilayah/<int:pk>/ubah/", views.region_edit, name="region-edit"),
     path("indikator-rawat-inap/", views.inpatient_indicators, name="indicators"),
