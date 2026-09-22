@@ -200,10 +200,22 @@ class MonthlyHealthVerificationForm(forms.Form):
         for index, row in enumerate(self.payload.get("tourist_visits", [])):
             if indicator_code and indicator_code != "tourist-visits":
                 continue
+            category_field = f"tourist_{index}_category"
             origin, count = f"tourist_{index}_origin", f"tourist_{index}_count"
+            category = {
+                "wisnus": "domestic",
+                "wisman": "international",
+            }.get(row.get("category"), row.get("category"))
+            self.fields[category_field] = forms.ChoiceField(
+                label="Kategori",
+                choices=(
+                    ("domestic", "Wisatawan Nusantara"),
+                    ("international", "Wisatawan Mancanegara"),
+                ),
+                initial=category,
+            )
             self.fields[origin] = forms.CharField(initial=row.get("origin", ""))
             self.fields[count] = forms.IntegerField(min_value=0, initial=row.get("count", 0))
-            category = row.get("category")
             category_label = {
                 "domestic": "Wisatawan Nusantara",
                 "international": "Wisatawan Mancanegara",
@@ -211,7 +223,7 @@ class MonthlyHealthVerificationForm(forms.Form):
                 "wisman": "Wisatawan Mancanegara",
             }.get(category, category)
             self.tourist_rows.append({
-                "category": category, "category_label": category_label,
+                "category": category_field, "category_label": category_label,
                 "origin": origin, "count": count,
                 "mapped_code": row.get("mapped_code"),
                 "mapped_name": row.get("mapped_name"),
@@ -242,7 +254,11 @@ class MonthlyHealthVerificationForm(forms.Form):
             "unresolved": "Belum dikenali",
         }
         for index, row in enumerate(self.payload.get("tourist_visits", [])):
-            category = row.get("category")
+            category_field = f"tourist_{index}_category"
+            category = (
+                self.data.get(category_field, row.get("category"))
+                if self.is_bound else row.get("category")
+            )
             if category == "international":
                 canonical_code, canonical_name = "INTL", "Luar Indonesia"
             else:
@@ -281,7 +297,7 @@ class MonthlyHealthVerificationForm(forms.Form):
         return sorted(groups.values(), key=lambda item: (item["canonical_name"], item["category"]))
 
     def bound_rows(self, rows):
-        return [{key: self[value] if key in {"count", "name", "origin"} or key == "code" and isinstance(value, str) and value in self.fields else value for key, value in row.items()} for row in rows]
+        return [{key: self[value] if key in {"category", "count", "name", "origin"} or key == "code" and isinstance(value, str) and value in self.fields else value for key, value in row.items()} for row in rows]
 
     def clean(self):
         cleaned = super().clean()
@@ -299,6 +315,7 @@ class MonthlyHealthVerificationForm(forms.Form):
                 row["patient_count"] = cleaned[f"disease_{index}_count"]
         for index, row in enumerate(result.get("tourist_visits", [])):
             if f"tourist_{index}_count" in cleaned:
+                row["category"] = cleaned[f"tourist_{index}_category"]
                 row["origin"] = cleaned[f"tourist_{index}_origin"]
                 row["count"] = cleaned[f"tourist_{index}_count"]
         for index, row in enumerate(result.get("disease_groups", [])):

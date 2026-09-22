@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import AdministrativeRegion, RegionAlias, VerifiedTouristVisitRow
-from .services import store_monthly_health_indicators
+from .services import save_monthly_health_verification, store_monthly_health_indicators
 from .forms import MonthlyHealthVerificationForm
 
 
@@ -116,6 +116,41 @@ class RegionCleaningTests(TestCase):
         self.assertEqual(summary["canonical_code"], "52.02")
         self.assertEqual(summary["raw_names"], ["LOITENG", "LOTENG"])
         self.assertEqual(summary["count"], 6)
+
+    def test_verification_form_can_correct_tourist_category_without_changing_source(self):
+        source = store_monthly_health_indicators(period=date(2027, 2, 1), payload=self.payload([
+            {"category": "domestic", "origin": "Australia", "count": 3},
+        ]))
+        record = source.verification
+        form = MonthlyHealthVerificationForm(
+            data={
+                "tourist_0_category": "international",
+                "tourist_0_origin": "Australia",
+                "tourist_0_count": "3",
+                "notes": "Asal luar Indonesia tidak terjaring status izin tinggal SIMRS.",
+            },
+            payload=record.to_working_payload(),
+            indicator_code="tourist-visits",
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data["verified_data"]["tourist_visits"][0]["category"], "international")
+        verifier = get_user_model().objects.create_user("category-corrector")
+        indicator_verification = record.indicator_verifications.get(indicator_code="tourist-visits")
+        save_monthly_health_verification(
+            record=record,
+            indicator_verification=indicator_verification,
+            data=form.cleaned_data["verified_data"],
+            notes=form.cleaned_data["notes"],
+            user=verifier,
+            approve=False,
+        )
+
+        self.assertEqual(record.tourist_visit_rows.get().category, "international")
+        audit = record.audits.latest("created_at")
+        self.assertEqual(audit.before_data["tourist_visits"][0]["category"], "domestic")
+        self.assertEqual(audit.after_data["tourist_visits"][0]["category"], "international")
+        self.assertEqual(source.source_data["tourist_visits"][0]["category"], "domestic")
 
     def test_village_name_is_not_auto_matched_without_official_code(self):
         AdministrativeRegion.objects.create(
