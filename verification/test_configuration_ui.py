@@ -162,6 +162,10 @@ class SimrsEndpointManagementTests(TestCase):
         self.assertNotIn("SUDAH DIPETAKAN", result_ids)
         self.assertNotIn("Australia", result_ids)
 
+        region_list = self.client.get(reverse("verification:region-list"))
+        self.assertContains(region_list, "BELUM DIKENALI")
+        self.assertNotContains(region_list, "Australia")
+
     def test_user_without_region_permission_cannot_open_mapping(self):
         self.client.force_login(self.regular)
         self.assertEqual(self.client.get(reverse("verification:region-list")).status_code, 403)

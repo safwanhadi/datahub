@@ -227,7 +227,13 @@ def region_list(request):
     if island_group:
         regions = regions.filter(island_group__iexact=island_group)
     page = Paginator(regions, 50).get_page(request.GET.get("page"))
-    unresolved = VerifiedTouristVisitRow.objects.filter(region__isnull=True).values(
+    # Kategori internasional sudah ditentukan SIMRS berdasarkan status
+    # KITAS/non-KITAS, bukan berdasarkan nama origin. Hanya data domestik yang
+    # perlu masuk antrean pemetaan master wilayah Indonesia.
+    unresolved = VerifiedTouristVisitRow.objects.filter(
+        category="domestic",
+        region__isnull=True,
+    ).values(
         "origin_raw", "origin_code"
     ).annotate(total=Sum("count")).order_by("origin_raw")
     return render(request, "verification/region_list.html", {
