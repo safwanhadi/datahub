@@ -9,7 +9,7 @@
     <label>{{ form.region_type.label }}{{ form.region_type }}{{ form.region_type.errors }}</label><label>{{ form.parent.label }}{{ form.parent }}{{ form.parent.errors }}</label>
     <label>{{ form.island_group.label }}{{ form.island_group }}{{ form.island_group.errors }}<small>Contoh: Lombok. Dipakai untuk agregasi lintas kabupaten/kota.</small></label><label class="toggle-field">{{ form.is_active }}<span><strong>Wilayah aktif</strong><small>Dapat digunakan untuk normalisasi data baru.</small></span>{{ form.is_active.errors }}</label>
   </div></section>
-  <section class="panel form-section"><div class="section-heading"><div><h2>Alias dari SIMRS</h2><p>Masukkan seluruh variasi nama yang harus digabung ke wilayah ini.</p></div></div>
+  <section class="panel form-section" data-alias-suggestions-url="{% url 'verification:region-alias-suggestions' %}"><div class="section-heading"><div><h2>Alias dari SIMRS</h2><p>Pilih rekomendasi dari nilai yang pernah dikirim SIMRS atau ketik alias lain. Nilai tetap disimpan sebagai teks.</p></div></div>
     {{ formset.management_form }}{{ formset.non_form_errors }}
     <div class="alias-list" id="alias-formset">{% for alias_form in formset %}<div class="alias-row">{% for hidden in alias_form.hidden_fields %}{{ hidden }}{% endfor %}<label>Nama/alias{{ alias_form.alias }}{{ alias_form.alias.errors }}</label><label>Sistem sumber{{ alias_form.source_system }}{{ alias_form.source_system.errors }}</label><label class="check-label">{{ alias_form.is_active }} Aktif</label><label class="delete-grant">{{ alias_form.DELETE }} Hapus</label></div>{% endfor %}</div>
     <template id="empty-alias-form"><div class="alias-row">{% with alias_form=formset.empty_form %}{% for hidden in alias_form.hidden_fields %}{{ hidden }}{% endfor %}<label>Nama/alias{{ alias_form.alias }}</label><label>Sistem sumber{{ alias_form.source_system }}</label><label class="check-label">{{ alias_form.is_active }} Aktif</label><label class="delete-grant">{{ alias_form.DELETE }} Hapus</label>{% endwith %}</div></template>
@@ -41,6 +41,36 @@
         noResults: () => "Wilayah tidak ditemukan",
         searching: () => "Mencari...",
       },
+    });
+    const aliasUrl = document.querySelector("[data-alias-suggestions-url]").dataset.aliasSuggestionsUrl;
+    const initializeAliasSelect = (element) => {
+      $(element).select2({
+        tags: true,
+        allowClear: true,
+        minimumInputLength: 1,
+        placeholder: "Pilih nilai SIMRS atau ketik alias",
+        width: "100%",
+        ajax: {
+          url: aliasUrl,
+          dataType: "json",
+          delay: 250,
+          data: (params) => ({q: params.term || ""}),
+          processResults: (data) => data,
+        },
+        createTag: (params) => {
+          const value = params.term.trim();
+          return value ? {id: value, text: `${value} (nilai baru)`, newTag: true} : null;
+        },
+        language: {
+          inputTooShort: () => "Ketik minimal 1 karakter",
+          noResults: () => "Tidak ada rekomendasi; nilai tetap dapat diketik",
+          searching: () => "Mencari nilai dari SIMRS...",
+        },
+      });
+    };
+    document.querySelectorAll(".js-simrs-alias").forEach(initializeAliasSelect);
+    document.querySelector("#add-alias").addEventListener("click", () => {
+      initializeAliasSelect(list.lastElementChild.querySelector(".js-simrs-alias"));
     });
   })();
 </script>

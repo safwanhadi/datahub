@@ -6,17 +6,17 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .forms import AdministrativeRegionForm, IndicatorPeriodForm, InpatientIndicatorStandardForm, InpatientIndicatorVerificationForm, InpatientWorkingDataCorrectionForm, MonthlyHealthVerificationForm, RegionAliasFormSet, SimrsApiEndpointForm
 from .analytics import analyze_inpatient_record, get_applicable_standards
-from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow
+from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, RegionAlias, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow, normalize_region_name
 from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS
 from .oauth import OAuthServerUnavailable
 from .services import SimrsConnectionError, fetch_inpatient_indicator, fetch_monthly_health_indicators, reprocess_region_mappings, save_inpatient_verification, save_inpatient_working_data_correction, save_monthly_health_verification
@@ -235,6 +235,36 @@ def region_list(request):
         "selected_type": region_type, "selected_group": island_group,
         "region_types": AdministrativeRegion.RegionType.choices,
     })
+
+
+@permission_required("verification.view_administrativeregion", raise_exception=True)
+def region_alias_suggestions(request):
+    """Nilai wilayah domestik yang benar-benar pernah diterima dari SIMRS."""
+    query = request.GET.get("q", "").strip()
+    rows = VerifiedTouristVisitRow.objects.filter(
+        category="domestic",
+    ).exclude(origin_raw="")
+    if query:
+        rows = rows.filter(origin_raw__icontains=query)
+
+    used_aliases = set(
+        RegionAlias.objects.filter(is_active=True).values_list("normalized_alias", flat=True)
+    )
+    candidates = rows.values("origin_raw").annotate(
+        row_count=Count("id"), total=Sum("count")
+    ).order_by("origin_raw")[:200]
+    results = []
+    for item in candidates:
+        raw_name = item["origin_raw"].strip()
+        if normalize_region_name(raw_name) in used_aliases:
+            continue
+        results.append({
+            "id": raw_name,
+            "text": f'{raw_name} — {item["row_count"]} data / {item["total"]} kunjungan',
+        })
+        if len(results) == 30:
+            break
+    return JsonResponse({"results": results})
 
 
 @transaction.atomic

@@ -1,9 +1,12 @@
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import AdministrativeRegion, SimrsApiEndpoint
+from .models import AdministrativeRegion, RegionAlias, SimrsApiEndpoint, VerifiedTouristVisitRow
+from .services import store_monthly_health_indicators
 
 
 class SimrsEndpointManagementTests(TestCase):
@@ -101,6 +104,38 @@ class SimrsEndpointManagementTests(TestCase):
         self.assertContains(response, "Cari kode atau nama wilayah induk")
         self.assertContains(response, "minimumInputLength: 3")
         self.assertContains(response, "karakter lagi")
+
+    def test_region_alias_field_uses_editable_simrs_suggestions(self):
+        verifier = get_user_model().objects.create_user("alias-select2", password="secret")
+        verifier.groups.add(Group.objects.get(name="Verifikator"))
+        self.client.force_login(verifier)
+        response = self.client.get(reverse("verification:region-create"))
+        self.assertContains(response, 'class="js-simrs-alias"')
+        self.assertContains(response, "tags: true")
+        self.assertContains(response, reverse("verification:region-alias-suggestions"))
+        self.assertContains(response, "Nilai tetap disimpan sebagai teks")
+
+    def test_alias_suggestions_only_use_unmapped_domestic_simrs_values(self):
+        region = AdministrativeRegion.objects.create(
+            official_code="52.02", name="Kabupaten Lombok Tengah", region_type="regency"
+        )
+        RegionAlias.objects.create(region=region, alias="SUDAH DIPETAKAN")
+        store_monthly_health_indicators(period=date(2026, 9, 1), payload={
+            "hospital": {"code": "RS-M", "name": "RS Mandalika"},
+            "visits": [], "top_diseases": [], "disease_groups": [],
+            "tourist_visits": [
+                {"category": "domestic", "origin": "BELUM DIKENALI", "count": 4},
+                {"category": "domestic", "origin": "SUDAH DIPETAKAN", "count": 2},
+                {"category": "international", "origin": "Australia", "count": 3},
+            ],
+        })
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("verification:region-alias-suggestions"), {"q": ""})
+        self.assertEqual(response.status_code, 200)
+        result_ids = {item["id"] for item in response.json()["results"]}
+        self.assertIn("BELUM DIKENALI", result_ids)
+        self.assertNotIn("SUDAH DIPETAKAN", result_ids)
+        self.assertNotIn("Australia", result_ids)
 
     def test_user_without_region_permission_cannot_open_mapping(self):
         self.client.force_login(self.regular)

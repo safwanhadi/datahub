@@ -40,6 +40,24 @@ class RegionAliasForm(forms.ModelForm):
         model = RegionAlias
         fields = ("alias", "source_system", "is_active")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Select2 memakai elemen <select>, tetapi field model tetap CharField.
+        # Nilai yang sedang diedit/terkirim perlu menjadi option agar tetap
+        # tampil, sementara nilai baru tetap diperbolehkan melalui mode tags.
+        alias = ""
+        if self.is_bound:
+            alias = self.data.get(self.add_prefix("alias"), "").strip()
+        elif self.instance and self.instance.pk:
+            alias = self.instance.alias
+        self.fields["alias"].widget = forms.Select(
+            attrs={
+                "class": "js-simrs-alias",
+                "data-placeholder": "Pilih nilai SIMRS atau ketik alias",
+            },
+            choices=[(alias, alias)] if alias else [],
+        )
+
 
 RegionAliasFormSet = inlineformset_factory(
     AdministrativeRegion, RegionAlias, form=RegionAliasForm, extra=1, can_delete=True
