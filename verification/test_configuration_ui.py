@@ -90,6 +90,18 @@ class SimrsEndpointManagementTests(TestCase):
         self.assertRedirects(response, reverse("verification:region-list"))
         self.assertTrue(AdministrativeRegion.objects.filter(official_code="ID-TEST").exists())
 
+    def test_region_form_uses_searchable_select2_parent_filter(self):
+        verifier = get_user_model().objects.create_user("region-select2", password="secret")
+        verifier.groups.add(Group.objects.get(name="Verifikator"))
+        self.client.force_login(verifier)
+        response = self.client.get(reverse("verification:region-create"))
+        self.assertContains(response, "select2@4.1.0-rc.0/dist/css/select2.min.css")
+        self.assertContains(response, "select2@4.1.0-rc.0/dist/js/select2.min.js")
+        self.assertContains(response, 'class="js-region-parent"')
+        self.assertContains(response, "Cari kode atau nama wilayah induk")
+        self.assertContains(response, "minimumInputLength: 3")
+        self.assertContains(response, "karakter lagi")
+
     def test_user_without_region_permission_cannot_open_mapping(self):
         self.client.force_login(self.regular)
         self.assertEqual(self.client.get(reverse("verification:region-list")).status_code, 403)

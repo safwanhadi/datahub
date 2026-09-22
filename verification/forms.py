@@ -13,6 +13,12 @@ class AdministrativeRegionForm(forms.ModelForm):
     class Meta:
         model = AdministrativeRegion
         fields = ("official_code", "name", "region_type", "parent", "island_group", "is_active")
+        widgets = {
+            "parent": forms.Select(attrs={
+                "class": "js-region-parent",
+                "data-placeholder": "Cari kode atau nama wilayah induk",
+            }),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

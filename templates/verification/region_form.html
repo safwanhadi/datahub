@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block extra_css %}<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">{% endblock %}
 {% block title %}{% if region.pk %}Ubah Wilayah{% else %}Tambah Wilayah{% endif %} — DataHub{% endblock %}
 {% block heading %}{% if region.pk %}Ubah wilayah{% else %}Tambah wilayah{% endif %}{% endblock %}
 {% block content %}
@@ -16,5 +17,31 @@
   </section>
   <div class="form-actions"><a class="button secondary" href="{% url 'verification:region-list' %}">Batal</a><button class="primary" type="submit">Simpan wilayah &amp; alias</button></div>
 </form>
-<script>(()=>{const list=document.querySelector("#alias-formset"),total=document.querySelector("#id_aliases-TOTAL_FORMS"),template=document.querySelector("#empty-alias-form");document.querySelector("#add-alias").addEventListener("click",()=>{const index=Number(total.value);list.insertAdjacentHTML("beforeend",template.innerHTML.replaceAll("__prefix__",index));total.value=index+1;});})();</script>
+{% endblock %}
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+  (() => {
+    const list = document.querySelector("#alias-formset");
+    const total = document.querySelector("#id_aliases-TOTAL_FORMS");
+    const template = document.querySelector("#empty-alias-form");
+    document.querySelector("#add-alias").addEventListener("click", () => {
+      const index = Number(total.value);
+      list.insertAdjacentHTML("beforeend", template.innerHTML.replaceAll("__prefix__", index));
+      total.value = index + 1;
+    });
+    $(".js-region-parent").select2({
+      allowClear: true,
+      minimumInputLength: 3,
+      placeholder: "Cari kode atau nama wilayah induk",
+      width: "100%",
+      language: {
+        inputTooShort: (args) => `Ketik ${args.minimum - args.input.length} karakter lagi`,
+        noResults: () => "Wilayah tidak ditemukan",
+        searching: () => "Mencari...",
+      },
+    });
+  })();
+</script>
 {% endblock %}

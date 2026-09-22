@@ -7,6 +7,7 @@
   <title>{% block title %}SIMRS DataHub{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260808-4">
   <link rel="stylesheet" href="{% static 'css/indicators.css' %}?v=20260807-2">
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
   <aside class="sidebar">
@@ -35,5 +36,6 @@
     {% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}
     {% block content %}{% endblock %}
   </main>
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

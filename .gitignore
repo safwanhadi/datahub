@@ -54,3 +54,9 @@ Thumbs.db
 
 # Project-specific reference files
 .refrensi_app/
+
+# Local Codex work reports (imported separately by Lapkin)
+.work-reports/
+AGENTS.md
+docs/work-report.schema.json
+docs/work-report.example.json
