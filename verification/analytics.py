@@ -1,4 +1,44 @@
 from decimal import Decimal
+from types import SimpleNamespace
+
+
+def summarize_inpatient_records(records, period_start, period_end):
+    """Use an exact verified period, otherwise combine nonoverlapping monthly working data."""
+    records = list(records)
+    exact = next((r for r in records if r.source.period_start == period_start
+                  and r.source.period_end == period_end), None)
+    if exact:
+        selected = [exact]
+    else:
+        selected = sorted((r for r in records if r.source.period_type == "month"),
+                          key=lambda r: r.source.period_start)
+        selected = [r for i, r in enumerate(selected)
+                    if i == 0 or r.source.period_start > selected[i - 1].source.period_end]
+    if not selected:
+        return None
+    days = sum(r.working_days_in_period for r in selected)
+    capacity = sum(Decimal(r.working_beds) * r.working_days_in_period for r in selected)
+    if len(selected) == 1:
+        values = {code: getattr(selected[0], code) for code in INPATIENT_STANDARDS}
+    else:
+        care = Decimal(sum(r.working_care_days for r in selected))
+        discharged = Decimal(sum(r.working_discharged_patients for r in selected) or 1)
+        beds = capacity / Decimal(days or 1)
+        values = {
+            "alos": care / discharged,
+            "bor": care / (capacity or 1) * 100,
+            "bto": Decimal(sum(r.working_discharged_patients for r in selected)) / (beds or 1),
+            "toi": (capacity - care) / discharged,
+            "gdr": Decimal(sum(r.working_deaths for r in selected)) / discharged * 1000,
+            "ndr": Decimal(sum(r.working_deaths_over_48h for r in selected)) / discharged * 1000,
+        }
+        values = {k: v.quantize(Decimal("0.01")) for k, v in values.items()}
+    covered_days = sum((r.source.period_end - r.source.period_start).days + 1 for r in selected)
+    return SimpleNamespace(
+        source=SimpleNamespace(days_in_period=days, period_start=period_start, period_end=period_end),
+        period=period_start, covered_days=covered_days,
+        expected_days=(period_end - period_start).days + 1, **values,
+    )
 
 
 INPATIENT_STANDARDS = {
@@ -39,7 +79,7 @@ INPATIENT_STANDARDS = {
 }
 
 
-def analyze_inpatient_record(record, standards=None):
+def analyze_inpatient_record(record, standards=None, *, period_fraction=None, period_label=None):
     """Bandingkan hasil verifikasi dengan acuan Kemenkes secara aman per periode."""
     results = []
     standards = standards or {}
@@ -75,6 +115,23 @@ def analyze_inpatient_record(record, standards=None):
         comparison_value = value
         comparison_note = ""
         annualize = configured.period_basis == "annual" if configured else code == "bto"
+        if annualize and period_fraction is not None:
+            for bound in ("minimum", "maximum", "maximum_exclusive"):
+                if bound in meta:
+                    meta[bound] *= period_fraction
+            lower = meta.get("minimum")
+            upper = meta.get("maximum", meta.get("maximum_exclusive"))
+            if lower is not None and upper is not None:
+                meta["standard"] = f"{lower:.2f}–{upper:.2f} {meta['unit']}/{period_label}"
+            elif upper is not None:
+                operator = "<" if "maximum_exclusive" in meta else "≤"
+                meta["standard"] = f"{operator}{upper:.2f} {meta['unit']}/{period_label}"
+            elif lower is not None:
+                meta["standard"] = f"≥{lower:.2f} {meta['unit']}/{period_label}"
+            comparison_note = "Acuan tahunan dikonversi proporsional terhadap jumlah hari data terverifikasi."
+            annualize = False
+            meta["low"] = meta.get("low", "Nilai di bawah acuan periode.").replace("acuan tahunan", "acuan periode")
+            meta["high"] = meta.get("high", "Nilai di atas acuan periode.").replace("acuan tahunan", "acuan periode")
         if annualize and record.source.days_in_period:
             comparison_value = value * Decimal("365") / Decimal(record.source.days_in_period)
             if record.source.days_in_period < 365:

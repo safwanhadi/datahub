@@ -15,13 +15,14 @@
 
 <section class="metrics analytics-metrics">
   <article><span>Periode terverifikasi</span><strong>{{ inpatient_approved }}</strong><small>Data rawat inap siap dianalisis</small></article>
-  <article><span>Sesuai standar</span><strong class="metric-good">{{ indicator_ideal }}</strong><small>Dari enam indikator terbaru</small></article>
+  <article><span>Sesuai standar</span><strong class="metric-good">{{ indicator_ideal }}</strong><small>Dari enam indikator periode pilihan</small></article>
   <article><span>Perlu perhatian</span><strong class="metric-warning">{{ indicator_attention }}</strong><small>Indikator di luar batas acuan</small></article>
   <article><span>Data kesehatan siap API</span><strong>{{ health_approved }}</strong><small>Periode kesehatan terverifikasi</small></article>
 </section>
 
 <section class="panel analytics-panel">
-  <div class="panel-title"><div><h2>Analisis indikator rawat inap</h2><p>Perbandingan hasil verifikasi terbaru terhadap standar pelayanan rumah sakit Kementerian Kesehatan.</p></div><a href="{% url 'verification:indicators' %}">Lihat data verifikasi →</a></div>
+  <div class="panel-title"><div><h2>Analisis indikator rawat inap</h2><p>Ringkasan {{ period_label }} berdasarkan data terverifikasi dan acuan yang berlaku pada awal periode.</p></div><a href="{% url 'verification:indicators' %}">Lihat data verifikasi →</a></div>
+  {% if latest_inpatient %}<p class="data-note">Cakupan data terverifikasi: {{ latest_inpatient.covered_days }} dari {{ latest_inpatient.expected_days }} hari. {% if latest_inpatient.covered_days < latest_inpatient.expected_days %}Data periode belum lengkap; nilai dan acuan BTO hanya mencakup data yang tersedia.{% endif %} Rasio dan rata-rata tetap menggunakan satuan acuannya.</p>{% endif %}
   {% if indicator_analysis %}<div class="analysis-grid">
     {% for item in indicator_analysis %}<article class="analysis-card {{ item.level }}">
       <div class="analysis-card-head"><div><span>{{ item.name }}</span><small>{{ item.description }}</small></div><span class="analysis-status {{ item.level }}">{{ item.label }}</span></div>

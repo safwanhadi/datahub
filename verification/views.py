@@ -1,6 +1,7 @@
 import calendar
 import json
 from datetime import date
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required, user_passes_test
@@ -15,7 +16,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .forms import AdministrativeRegionForm, IndicatorPeriodForm, InpatientIndicatorStandardForm, InpatientIndicatorVerificationForm, InpatientWorkingDataCorrectionForm, MonthlyHealthVerificationForm, RegionAliasFormSet, SimrsApiEndpointForm
-from .analytics import analyze_inpatient_record, get_applicable_standards
+from .analytics import analyze_inpatient_record, get_applicable_standards, summarize_inpatient_records
 from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, RegionAlias, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow, normalize_region_name
 from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS
 from .oauth import OAuthServerUnavailable
@@ -85,9 +86,9 @@ def dashboard(request):
     approved_inpatient = VerifiedInpatientIndicator.objects.filter(
         status=VerifiedInpatientIndicator.Status.APPROVED,
         source__period_start__gte=period_start,
-        source__period_start__lte=period_end,
+        source__period_end__lte=period_end,
     ).select_related("source", "verified_by")
-    latest_inpatient = approved_inpatient.first()
+    latest_inpatient = summarize_inpatient_records(approved_inpatient, period_start, period_end)
     approved_health = VerifiedMonthlyHealthIndicator.objects.filter(
         indicator_verifications__status=HealthIndicatorVerification.Status.APPROVED,
         source__period_type="month",
@@ -149,7 +150,9 @@ def dashboard(request):
             "tourist_published_total": wisnus_total + wisman_total,
         }
     indicator_analysis = analyze_inpatient_record(
-        latest_inpatient, get_applicable_standards(latest_inpatient.period)
+        latest_inpatient, get_applicable_standards(period_start),
+        period_fraction=Decimal(latest_inpatient.source.days_in_period) / Decimal(366 if calendar.isleap(reference.year) else 365),
+        period_label={"monthly": "bulan", "quarterly": "triwulan", "semester": "semester", "yearly": "tahun"}[period_mode],
     ) if latest_inpatient else []
     context = {
         "inpatient_records": InpatientIndicatorSource.objects.select_related("verification")[:5],
