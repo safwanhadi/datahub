@@ -116,6 +116,7 @@ def analyze_inpatient_record(record, standards=None, *, period_fraction=None, pe
         comparison_note = ""
         annualize = configured.period_basis == "annual" if configured else code == "bto"
         if annualize and period_fraction is not None:
+            annual_standard = meta["standard"]
             for bound in ("minimum", "maximum", "maximum_exclusive"):
                 if bound in meta:
                     meta[bound] *= period_fraction
@@ -128,7 +129,10 @@ def analyze_inpatient_record(record, standards=None, *, period_fraction=None, pe
                 meta["standard"] = f"{operator}{upper:.2f} {meta['unit']}/{period_label}"
             elif lower is not None:
                 meta["standard"] = f"≥{lower:.2f} {meta['unit']}/{period_label}"
-            comparison_note = "Acuan tahunan dikonversi proporsional terhadap jumlah hari data terverifikasi."
+            comparison_note = (
+                f"Standar satu tahun penuh: {annual_standard}. "
+                "Acuan periode dikonversi proporsional terhadap jumlah hari data terverifikasi."
+            )
             annualize = False
             meta["low"] = meta.get("low", "Nilai di bawah acuan periode.").replace("acuan tahunan", "acuan periode")
             meta["high"] = meta.get("high", "Nilai di atas acuan periode.").replace("acuan tahunan", "acuan periode")
