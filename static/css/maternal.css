@@ -1,6 +1,7 @@
 .maternal-filter-panel { margin-bottom: 20px; }
-.maternal-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
-.maternal-filter label { display: grid; gap: 6px; flex: 1 1 160px; max-width: 250px; font-size: 12px; font-weight: 700; }
+.maternal-filter { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 14px; }
+.maternal-filter label { display: grid; gap: 6px; flex: 0 1 190px; min-width: 0; font-size: 12px; font-weight: 700; }
+.maternal-filter > button { flex: 0 0 auto; white-space: nowrap; }
 .maternal-filter input, .maternal-filter select { width: 100%; }
 .maternal-filter [hidden] { display: none; }
 .maternal-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }

@@ -2,7 +2,19 @@
 {% load static %}
 {% block title %}Profil Maternal &amp; Perinatal — DataHub{% endblock %}
 {% block heading %}Profil Maternal &amp; Perinatal{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/maternal.css' %}">{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/maternal.css' %}?v=20261026-2">
+<style>
+/* Keep the period controls usable while deployment refreshes static assets. */
+#maternal-period-filter{display:flex;flex-wrap:nowrap;align-items:flex-end;gap:14px}
+#maternal-period-filter>label{display:grid;gap:6px;flex:0 1 190px;min-width:0}
+#maternal-period-filter input,#maternal-period-filter select{width:100%}
+#maternal-period-filter>[hidden]{display:none}
+#maternal-period-filter>button{flex:0 0 auto;white-space:nowrap}
+@media(max-width:760px){#maternal-period-filter{flex-wrap:wrap}#maternal-period-filter>label{flex:1 1 160px}}
+@media(max-width:480px){#maternal-period-filter{flex-direction:column;align-items:stretch}#maternal-period-filter>label{flex:auto}}
+</style>
+{% endblock %}
 {% block content %}
 <section class="analytics-hero">
   <div><span class="eyebrow">PROFIL INTERNAL RUMAH SAKIT</span><h2>Pelayanan ibu dan bayi</h2><p>Ringkasan layanan, kasus terbanyak, dan jumlah kematian berdasarkan data terverifikasi.</p></div>
@@ -32,4 +44,4 @@
 {% if perms.verification.change_verifiedmonthlyhealthindicator or perms.verification.add_monthlyhealthindicatorsource %}<section class="panel section-gap"><h2>Data dan verifikasi</h2><div class="table-wrap"><table><thead><tr><th>Periode</th><th>Status</th><th>Verifikator</th><th>Tindakan</th></tr></thead><tbody>{% for row in queue %}<tr><td>{{ row.period_start|date:"F Y" }}</td><td><span class="badge {% if row.status == 'approved' %}verified{% else %}in_review{% endif %}">{{ row.get_status_display }}</span></td><td>{{ row.verified_by|default:"—" }}</td><td>{% if perms.verification.change_verifiedmonthlyhealthindicator %}<a class="button" href="{% url 'verification:maternal-verify' row.pk %}">Periksa / verifikasi</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="4">Belum ada data sumber.</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 {% endblock %}
 
-{% block extra_js %}<script src="{% static 'js/maternal.js' %}" defer></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/maternal.js' %}?v=20261026-2" defer></script>{% endblock %}
