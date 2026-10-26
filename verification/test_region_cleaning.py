@@ -11,6 +11,33 @@ from .forms import MonthlyHealthVerificationForm
 
 
 class RegionCleaningTests(TestCase):
+    def test_reload_latest_tourists_imports_installation_without_replacing_other_indicators(self):
+        payload = self.payload([{"category": "international", "origin": "-", "count": 2}])
+        payload["visits"] = [{"installation": "outpatient", "payment_status": "bpjs", "count": 10}]
+        source = store_monthly_health_indicators(period=date(2026, 10, 1), payload=payload)
+        record = source.verification
+        record.indicator_verifications.update(status="approved")
+        record.visit_rows.update(count=15)
+        latest = self.payload([{"installation": "outpatient", "category": "international", "origin": "-", "count": 62}])
+        store_monthly_health_indicators(period=date(2026, 10, 1), payload=latest)
+        self.assertEqual(record.tourist_visit_rows.get().installation, "other")
+        user = get_user_model().objects.create_user("reload-tourists-admin", is_superuser=True, is_staff=True)
+        self.client.force_login(user)
+        url = reverse("verification:health-indicator-verify", args=[source.pk, "tourist-visits"])
+        self.assertContains(self.client.get(url), "Muat data wisatawan dari tarikan terbaru")
+        self.assertRedirects(self.client.post(url, {"action": "reload-tourists"}), url)
+        self.assertEqual(record.tourist_visit_rows.get().installation, "outpatient")
+        self.assertEqual(record.tourist_visit_rows.get().count, 62)
+        self.assertEqual(record.visit_rows.get().count, 15)
+        self.assertEqual(record.indicator_verifications.get(indicator_code="tourist-visits").status, "draft")
+        self.assertEqual(record.indicator_verifications.get(indicator_code="outpatient-visits").status, "approved")
+        source.refresh_from_db()
+        self.assertEqual(source.raw_response, latest)
+        audit = record.audits.latest("created_at")
+        self.assertEqual(audit.before_data["tourist_visits"][0]["count"], 2)
+        self.assertEqual(audit.after_data["tourist_visits"][0]["installation"], "outpatient")
+        self.assertEqual(audit.actor, user)
+
     def test_tourist_installations_survive_verification_and_dashboard_aggregation(self):
         region = AdministrativeRegion.objects.create(
             official_code="51", name="Bali", region_type="province",

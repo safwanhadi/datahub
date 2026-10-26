@@ -20,6 +20,7 @@ from .analytics import analyze_inpatient_record, get_applicable_standards, summa
 from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, RegionAlias, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow, normalize_region_name
 from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS, TOURIST_INSTALLATION_LABELS, tourist_installation
 from .oauth import OAuthServerUnavailable
+from .services import reload_tourist_working_data
 from .services import SimrsConnectionError, fetch_inpatient_indicator, fetch_monthly_health_indicators, reprocess_region_mappings, save_inpatient_verification, save_inpatient_working_data_correction, save_monthly_health_verification
 
 
@@ -510,6 +511,16 @@ def verify_monthly_health_indicators(request, pk, code):
     indicator_verification = get_object_or_404(
         record.indicator_verifications.select_related("verified_by"), indicator_code=code
     )
+    if request.method == "POST" and request.POST.get("action") == "reload-tourists":
+        if code != "tourist-visits":
+            raise Http404("Pemuatan ulang hanya tersedia untuk wisatawan.")
+        try:
+            reload_tourist_working_data(record=record, user=request.user)
+        except (ValidationError, ValueError) as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "Data wisatawan terbaru dimuat sebagai draf. Periksa instalasi dan jumlah sebelum menyetujui kembali.")
+        return redirect("verification:health-indicator-verify", pk=source.pk, code=code)
     form = MonthlyHealthVerificationForm(
         request.POST or None,
         payload=record.to_working_payload(),

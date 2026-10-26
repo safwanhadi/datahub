@@ -1,6 +1,7 @@
 import json
 import re
 import socket
+from copy import deepcopy
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal
@@ -493,6 +494,22 @@ def fetch_monthly_health_indicators(*, period=None, period_start=None, period_en
             raise ValueError(f"Endpoint {endpoint_code} harus memiliki results berupa array.")
         payload[payload_key] = results
     return store_monthly_health_indicators(period_start=start, period_end=end, period_type=period_type, payload=payload, user=user)
+
+
+@transaction.atomic
+def reload_tourist_working_data(*, record, user):
+    record = VerifiedMonthlyHealthIndicator.objects.select_for_update().select_related("source").get(pk=record.pk)
+    source_data = record.source.source_data
+    if "tourist_visits" not in source_data:
+        raise ValueError("Data sumber belum memiliki rincian wisatawan. Tarik ulang data SIMRS terlebih dahulu.")
+    data = record.to_working_payload()
+    data["tourist_visits"] = deepcopy(source_data["tourist_visits"])
+    indicator = record.indicator_verifications.get(indicator_code="tourist-visits")
+    return save_monthly_health_verification(
+        record=record, indicator_verification=indicator, data=data,
+        notes="Memuat ulang data wisatawan dari snapshot SIMRS terbaru; periksa kembali kategori, asal, instalasi, dan jumlah sebelum persetujuan.",
+        user=user, approve=False,
+    )
 
 
 @transaction.atomic

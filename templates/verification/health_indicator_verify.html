@@ -4,6 +4,13 @@
 {% block content %}
 <div class="compare-banner"><span>1. Data diterima</span><b>→</b><span class="active">2. Pemeriksaan {{ indicator.name }}</span><b>→</b><span>3. Siap untuk API</span></div>
 <div class="notice">Periode {{ source.period_start|date:"d M Y" }} – {{ source.period_end|date:"d M Y" }}. Persetujuan ini hanya berlaku untuk <strong>{{ indicator.name }}</strong>{% if indicator.description %}: {{ indicator.description }}{% endif %}.</div>
+{% if indicator_code == "tourist-visits" %}
+<section class="panel">
+  <h2>Perbarui salinan wisatawan</h2>
+  <p>Setelah menarik ulang dari SIMRS, muat hasil tarikan terbaru agar rincian instalasi tersedia. Seluruh koreksi wisatawan pada salinan kerja akan diganti oleh data sumber terbaru dan indikator kembali menjadi draf. Riwayat perubahan tetap tersimpan.</p>
+  <form method="post">{% csrf_token %}<button class="button" type="submit" name="action" value="reload-tourists">Muat data wisatawan dari tarikan terbaru</button></form>
+</section>
+{% endif %}
 <form method="post" class="stack">{% csrf_token %}{{ form.non_field_errors }}
 {% if form.bound_visit_rows %}<section class="panel"><div class="panel-title"><div><h2>{{ indicator.name }}</h2><p>Rincian berdasarkan jenis pembayaran.</p></div></div><div class="table-wrap"><table><thead><tr><th>Instalasi</th><th>Pembayaran</th><th>Jumlah kunjungan</th></tr></thead><tbody>{% for row in form.bound_visit_rows %}<tr><td>{{ row.installation }}</td><td>{{ row.payment_status }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 {% if form.bound_disease_rows %}<section class="panel"><div class="panel-title"><div><h2>10 penyakit terbanyak</h2><p>Diagnosis per instalasi.</p></div></div><div class="table-wrap"><table><thead><tr><th>Instalasi</th><th>Kode ICD-10</th><th>Nama penyakit</th><th>Jumlah pasien</th></tr></thead><tbody>{% for row in form.bound_disease_rows %}<tr><td>{{ row.installation }}</td><td>{{ row.code }}{{ row.code.errors }}</td><td>{{ row.name }}{{ row.name.errors }}</td><td>{{ row.count }}{{ row.count.errors }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
