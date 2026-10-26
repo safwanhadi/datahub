@@ -11,6 +11,35 @@ from .forms import MonthlyHealthVerificationForm
 
 
 class RegionCleaningTests(TestCase):
+    def test_duplicate_tourist_origins_preserve_all_rows_and_snapshot(self):
+        payload = self.payload([
+            {"category": "international", "origin": "LOMBOK TENGAH", "count": 3},
+            {"category": "international", "origin": "LOMBOK TENGAH", "count": 5},
+            {"category": "international", "origin": "LOMBOK TENGAH", "origin_code": "52.02", "count": 2},
+        ])
+        source = store_monthly_health_indicators(period=date(2026, 10, 1), payload=payload)
+        record = source.verification
+        self.assertEqual(record.tourist_visit_rows.count(), 3)
+        self.assertEqual(sum(row.count for row in record.tourist_visit_rows.all()), 10)
+        self.assertEqual(source.raw_response, payload)
+        self.assertEqual(source.source_data["tourist_visits"], payload["tourist_visits"])
+        self.assertEqual(record.to_payload()["tourist_visits"][0]["count"], 10)
+        self.assertEqual(record.audits.get().after_data["tourist_visits"], payload["tourist_visits"])
+
+        verifier = get_user_model().objects.create_user("duplicate-origin-verifier")
+        save_monthly_health_verification(
+            record=record,
+            indicator_verification=record.indicator_verifications.get(indicator_code="tourist-visits"),
+            data=record.to_working_payload(), notes="Verifikasi baris sumber berulang",
+            user=verifier, approve=False,
+        )
+        self.assertEqual(record.tourist_visit_rows.count(), 3)
+        self.assertEqual(record.audits.count(), 2)
+        store_monthly_health_indicators(period=date(2026, 10, 1), payload=payload)
+        self.assertEqual(record.tourist_visit_rows.count(), 3)
+        source.refresh_from_db()
+        self.assertEqual(source.raw_response, payload)
+
     def payload(self, tourist_rows):
         return {
             "hospital": {"code": "RS-M", "name": "RS Mandalika"},

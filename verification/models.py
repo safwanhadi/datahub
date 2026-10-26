@@ -567,7 +567,8 @@ class VerifiedTouristVisitRow(models.Model):
 
     class Meta:
         ordering = ("category", "origin")
-        constraints = [models.UniqueConstraint(fields=("verification", "category", "origin"), name="unique_verified_tourist_visit_row")]
+        # SIMRS may return multiple rows for the same category and origin,
+        # including rows with different region codes. Preserve each source row.
 
 
 class VerifiedDiseaseGroupRow(models.Model):
