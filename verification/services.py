@@ -34,7 +34,7 @@ from .models import (
     normalize_region_code,
 )
 from .oauth import get_simrs_access_token
-from .health_metadata import HEALTH_VERIFICATION_GROUPS, normalize_health_payload
+from .health_metadata import HEALTH_VERIFICATION_GROUPS, normalize_health_payload, tourist_installation
 
 
 class SimrsConnectionError(Exception):
@@ -373,6 +373,7 @@ def replace_health_indicator_rows(record, data):
         origin_code = normalize_region_code(row.get("origin_code", ""))
         region, method = resolve_region(origin_code, origin)
         tourist_rows.append(VerifiedTouristVisitRow(
+            installation=tourist_installation(row.get("installation")),
             verification=record, category=row["category"], origin=origin,
             origin_raw=origin, origin_code=origin_code, region=region,
             cleaning_method=method, count=row["count"],

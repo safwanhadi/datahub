@@ -18,7 +18,7 @@ from django.views.decorators.http import require_http_methods
 from .forms import AdministrativeRegionForm, IndicatorPeriodForm, InpatientIndicatorStandardForm, InpatientIndicatorVerificationForm, InpatientWorkingDataCorrectionForm, MonthlyHealthVerificationForm, RegionAliasFormSet, SimrsApiEndpointForm
 from .analytics import analyze_inpatient_record, get_applicable_standards, summarize_inpatient_records
 from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, RegionAlias, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow, normalize_region_name
-from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS
+from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS, TOURIST_INSTALLATION_LABELS, tourist_installation
 from .oauth import OAuthServerUnavailable
 from .services import SimrsConnectionError, fetch_inpatient_indicator, fetch_monthly_health_indicators, reprocess_region_mappings, save_inpatient_verification, save_inpatient_working_data_correction, save_monthly_health_verification
 
@@ -110,8 +110,12 @@ def dashboard(request):
             month_cursor = date(month_cursor.year + (month_cursor.month == 12), month_cursor.month % 12 + 1, 1)
         tourist_month_index = {(row["period"].year, row["period"].month): row for row in tourist_months}
         wisnus_total = wisman_total = 0
+        tourist_installations = {
+            code: {"label": label, "wisnus": 0, "wisman": 0, "total": 0}
+            for code, label in TOURIST_INSTALLATION_LABELS.items()
+        }
         for record in reversed(list(approved_health)):
-            payload = record.to_payload()
+            payload = record.to_payload(include_tourist_installation=True)
             approved_codes = {
                 item.indicator_code for item in record.indicator_verifications.all()
                 if item.status == HealthIndicatorVerification.Status.APPROVED
@@ -125,6 +129,11 @@ def dashboard(request):
                 key = (disease.get("installation"), disease.get("icd10_code"), disease.get("name"))
                 disease_totals[key] = disease_totals.get(key, 0) + disease.get("patient_count", 0)
             tourist_rows = payload.get("tourist_visits", []) if "tourist-visits" in approved_codes else []
+            for row in tourist_rows:
+                if row.get("category") in {"wisnus", "wisman"}:
+                    item = tourist_installations[tourist_installation(row.get("installation"))]
+                    item[row["category"]] += row.get("count", 0)
+                    item["total"] += row.get("count", 0)
             month_wisnus = sum(row.get("count", 0) for row in tourist_rows if row.get("category") == "wisnus")
             month_wisman = sum(row.get("count", 0) for row in tourist_rows if row.get("category") == "wisman")
             wisnus_total += month_wisnus
@@ -137,14 +146,31 @@ def dashboard(request):
             {"installation": key[0], "icd10_code": key[1], "name": key[2], "patient_count": count}
             for key, count in disease_totals.items()
         ]
+        payment_breakdown = []
+        for status, label in (
+            ("general", "Umum"), ("bpjs", "BPJS"),
+            ("private_insurance", "Asuransi"),
+            ("social_assistance", "Bantuan sosial"), ("other", "Lainnya"),
+        ):
+            counts = {
+                installation: sum(
+                    row.get("count", 0) for row in visits
+                    if row.get("payment_status") == status and row.get("installation") == installation
+                )
+                for installation in ("outpatient", "inpatient", "emergency")
+            }
+            payment_breakdown.append({"label": label, **counts, "total": sum(counts.values())})
         health_summary = {
             "record": latest_health,
             "total_visits": sum(row.get("count", 0) for row in visits),
+            "payment_breakdown": payment_breakdown,
+            "has_verified_visits": bool(visits),
             "outpatient": sum(row.get("count", 0) for row in visits if row.get("installation") == "outpatient"),
             "inpatient": sum(row.get("count", 0) for row in visits if row.get("installation") == "inpatient"),
             "emergency": sum(row.get("count", 0) for row in visits if row.get("installation") == "emergency"),
-            "top_diseases": sorted(top_diseases, key=lambda row: row.get("patient_count", 0), reverse=True)[:5],
+            "top_diseases": sorted(top_diseases, key=lambda row: row.get("patient_count", 0), reverse=True)[:10],
             "tourist_months": tourist_months,
+            "tourist_installations": list(tourist_installations.values()),
             "wisnus_total": wisnus_total,
             "wisman_total": wisman_total,
             "tourist_published_total": wisnus_total + wisman_total,
@@ -165,7 +191,7 @@ def dashboard(request):
         "indicator_analysis": indicator_analysis,
         "indicator_ideal": sum(item["level"] == "ideal" for item in indicator_analysis),
         "indicator_attention": sum(item["level"] != "ideal" for item in indicator_analysis),
-        "inpatient_trend": approved_inpatient[:6],
+        "inpatient_trend": approved_inpatient.order_by("source__period_start", "source__period_end", "pk"),
         "health_summary": health_summary,
         "period_mode": period_mode,
         "period_reference": reference.strftime("%Y-%m"),

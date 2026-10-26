@@ -3,6 +3,17 @@ from copy import deepcopy
 from django.core.exceptions import ValidationError
 
 INSTALLATIONS = {"emergency", "inpatient", "outpatient"}
+TOURIST_INSTALLATION_LABELS = {
+    "outpatient": "Rawat jalan", "inpatient": "Rawat inap",
+    "emergency": "IGD", "other": "Lainnya",
+}
+
+
+def tourist_installation(value):
+    """Unknown or absent SIMRS installation stays in the fallback bucket."""
+    return value if isinstance(value, str) and value in INSTALLATIONS else "other"
+
+
 PAYMENT_STATUSES = {"general", "bpjs", "private_insurance", "social_assistance", "other"}
 TOURIST_CATEGORIES = {"international", "domestic"}
 DISEASE_GROUPS = {"cancer": "C00-C96,D00-D48", "heart": "I00-I52", "stroke": "I60-I69", "uronephrology": "N00-N39"}

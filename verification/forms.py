@@ -5,7 +5,7 @@ from datetime import date
 from django import forms
 from django.forms import inlineformset_factory
 
-from .health_metadata import normalize_health_payload
+from .health_metadata import normalize_health_payload, TOURIST_INSTALLATION_LABELS, tourist_installation
 from .models import AdministrativeRegion, InpatientIndicatorStandard, RegionAlias, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator
 
 
@@ -202,6 +202,11 @@ class MonthlyHealthVerificationForm(forms.Form):
                 continue
             category_field = f"tourist_{index}_category"
             origin, count = f"tourist_{index}_origin", f"tourist_{index}_count"
+            installation_field = f"tourist_{index}_installation"
+            self.fields[installation_field] = forms.ChoiceField(
+                label="Instalasi", choices=tuple(TOURIST_INSTALLATION_LABELS.items()),
+                initial=tourist_installation(row.get("installation")), required=False,
+            )
             category = {
                 "wisnus": "domestic",
                 "wisman": "international",
@@ -224,6 +229,7 @@ class MonthlyHealthVerificationForm(forms.Form):
             }.get(category, category)
             self.tourist_rows.append({
                 "category": category_field, "category_label": category_label,
+                "installation": installation_field,
                 "origin": origin, "count": count,
                 "mapped_code": row.get("mapped_code"),
                 "mapped_name": row.get("mapped_name"),
@@ -297,7 +303,7 @@ class MonthlyHealthVerificationForm(forms.Form):
         return sorted(groups.values(), key=lambda item: (item["canonical_name"], item["category"]))
 
     def bound_rows(self, rows):
-        return [{key: self[value] if key in {"category", "count", "name", "origin"} or key == "code" and isinstance(value, str) and value in self.fields else value for key, value in row.items()} for row in rows]
+        return [{key: self[value] if key in {"category", "count", "name", "origin"} or key in {"code", "installation"} and isinstance(value, str) and value in self.fields else value for key, value in row.items()} for row in rows]
 
     def clean(self):
         cleaned = super().clean()
@@ -316,6 +322,7 @@ class MonthlyHealthVerificationForm(forms.Form):
         for index, row in enumerate(result.get("tourist_visits", [])):
             if f"tourist_{index}_count" in cleaned:
                 row["category"] = cleaned[f"tourist_{index}_category"]
+                row["installation"] = cleaned.get(f"tourist_{index}_installation") or tourist_installation(row.get("installation"))
                 row["origin"] = cleaned[f"tourist_{index}_origin"]
                 row["count"] = cleaned[f"tourist_{index}_count"]
         for index, row in enumerate(result.get("disease_groups", [])):

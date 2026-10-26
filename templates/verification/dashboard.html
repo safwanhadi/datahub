@@ -36,7 +36,7 @@
 </section>
 
 {% if inpatient_trend %}<section class="panel section-gap">
-  <div class="panel-title"><div><h2>Riwayat hasil terverifikasi</h2><p>Perbandingan enam periode terakhir untuk membaca arah perubahan indikator.</p></div></div>
+  <div class="panel-title"><div><h2>Riwayat hasil terverifikasi</h2><p>Seluruh hasil terverifikasi pada {{ period_label }}, diurutkan dari awal periode.</p></div></div>
   <div class="table-wrap"><table class="indicator-table trend-table"><thead><tr><th>Periode</th><th>ALOS<small>hari</small></th><th>BOR<small>%</small></th><th>BTO<small>kali</small></th><th>TOI<small>hari</small></th><th>GDR<small>‰</small></th><th>NDR<small>‰</small></th></tr></thead><tbody>
   {% for row in inpatient_trend %}<tr><td><strong>{{ row.source.period_start|date:"d M Y" }}</strong><small>s.d. {{ row.source.period_end|date:"d M Y" }}</small></td><td>{{ row.alos }}</td><td>{{ row.bor }}</td><td>{{ row.bto }}</td><td>{{ row.toi }}</td><td>{{ row.gdr }}</td><td>{{ row.ndr }}</td></tr>{% endfor %}
   </tbody></table></div>
@@ -47,9 +47,21 @@
     {% if health_summary %}<div class="volume-grid"><div><span>Total kunjungan</span><strong>{{ health_summary.total_visits }}</strong></div><div><span>Rawat jalan</span><strong>{{ health_summary.outpatient }}</strong></div><div><span>Rawat inap</span><strong>{{ health_summary.inpatient }}</strong></div><div><span>IGD</span><strong>{{ health_summary.emergency }}</strong></div></div><p class="data-note">Angka volume ditampilkan sebagai informasi deskriptif karena belum memiliki target lokal yang dikonfigurasi.</p>
     {% else %}<div class="empty">Belum ada indikator kesehatan terverifikasi.</div>{% endif %}
   </div>
-  <div class="panel"><div class="panel-title"><div><h2>Penyakit terbanyak</h2><p>Lima penyakit dengan jumlah pasien tertinggi pada data terbaru.</p></div></div>
+  <div class="panel"><div class="panel-title"><div><h2>Penyakit terbanyak</h2><p>Sepuluh penyakit dengan jumlah pasien tertinggi pada {{ period_label }} berdasarkan data terverifikasi.</p></div></div>
     {% if health_summary.top_diseases %}<ol class="disease-ranking">{% for disease in health_summary.top_diseases %}<li><div><strong>{{ disease.name }}</strong><small>{{ disease.icd10_code }} · {{ disease.installation }}</small></div><span>{{ disease.patient_count }} kasus</span></li>{% endfor %}</ol>{% else %}<div class="empty">Belum ada data penyakit terverifikasi.</div>{% endif %}
   </div>
+</section>
+
+<section class="panel section-gap">
+  <div class="panel-title"><div><h2>Rincian kunjungan berdasarkan penjamin</h2><p>Jumlah kunjungan pada {{ period_label }}, berdasarkan indikator kunjungan yang telah disetujui verifikator.</p></div></div>
+  {% if health_summary.has_verified_visits %}
+  <div class="table-wrap"><table class="indicator-table">
+    <thead><tr><th scope="col">Status penjamin</th><th scope="col">Rawat jalan</th><th scope="col">Rawat inap</th><th scope="col">IGD</th><th scope="col">Total kunjungan</th></tr></thead>
+    <tbody>{% for row in health_summary.payment_breakdown %}<tr><th scope="row">{{ row.label }}</th><td>{{ row.outpatient }}</td><td>{{ row.inpatient }}</td><td>{{ row.emergency }}</td><td><strong>{{ row.total }}</strong></td></tr>{% endfor %}</tbody>
+    <tfoot><tr><th scope="row">Total</th><td>{{ health_summary.outpatient }}</td><td>{{ health_summary.inpatient }}</td><td>{{ health_summary.emergency }}</td><td><strong>{{ health_summary.total_visits }}</strong></td></tr></tfoot>
+  </table></div>
+  <p class="data-note">Angka menunjukkan jumlah kunjungan, bukan jumlah pasien unik. Data yang belum disetujui tidak dihitung; angka nol berarti tidak ada kunjungan tercatat dalam data terverifikasi yang tersedia.</p>
+  {% else %}<div class="empty">Belum ada rincian kunjungan terverifikasi pada {{ period_label }}.</div>{% endif %}
 </section>
 
 <section class="panel section-gap tourist-dashboard">
@@ -60,6 +72,13 @@
     <div class="published"><span>Wisatawan Mancanegara</span><strong>{{ health_summary.wisman_total }}</strong><small>Seluruh kategori internasional</small></div>
     <div><span>Total wisatawan</span><strong>{{ health_summary.tourist_published_total }}</strong><small>Wisnus + Wisman</small></div>
   </div>
+  <h3>Asal instalasi kunjungan wisatawan</h3>
+  <p class="data-note">Data tanpa instalasi atau dengan nilai instalasi yang belum dikenali masuk Lainnya. Rincian dipisahkan ketika instalasi sudah tersedia pada salinan verifikasi. Hanya data wisatawan terverifikasi yang dihitung.</p>
+  <div class="table-wrap"><table class="mapping-table">
+    <thead><tr><th scope="col">Instalasi</th><th scope="col">Wisatawan Nusantara</th><th scope="col">Wisatawan Mancanegara</th><th scope="col">Total</th></tr></thead>
+    <tbody>{% for row in health_summary.tourist_installations %}<tr><th scope="row">{{ row.label }}</th><td>{{ row.wisnus }}</td><td>{{ row.wisman }}</td><td><strong>{{ row.total }}</strong></td></tr>{% endfor %}</tbody>
+    <tfoot><tr><th scope="row">Total</th><td>{{ health_summary.wisnus_total }}</td><td>{{ health_summary.wisman_total }}</td><td>{{ health_summary.tourist_published_total }}</td></tr></tfoot>
+  </table></div>
   {% if period_mode != "monthly" %}<div class="table-wrap"><table class="mapping-table tourist-period-table"><thead><tr><th>Bulan</th><th>Wisatawan Nusantara</th><th>Wisatawan Mancanegara</th><th>Total</th></tr></thead><tbody>
     {% for row in health_summary.tourist_months %}<tr><td><strong>{{ row.period|date:"F Y" }}</strong></td><td>{{ row.wisnus }}</td><td>{{ row.wisman }}</td><td><strong>{{ row.total }}</strong></td></tr>{% endfor %}
   </tbody><tfoot><tr><th>Total {{ period_label }}</th><th>{{ health_summary.wisnus_total }}</th><th>{{ health_summary.wisman_total }}</th><th>{{ health_summary.tourist_published_total }}</th></tr></tfoot></table></div>{% endif %}

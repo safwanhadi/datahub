@@ -11,6 +11,64 @@ from .forms import MonthlyHealthVerificationForm
 
 
 class RegionCleaningTests(TestCase):
+    def test_tourist_installations_survive_verification_and_dashboard_aggregation(self):
+        region = AdministrativeRegion.objects.create(
+            official_code="51", name="Bali", region_type="province",
+        )
+        local = AdministrativeRegion.objects.create(
+            official_code="52.02", name="Kabupaten Lombok Tengah", region_type="regency",
+        )
+        tourists = [
+            {"category": "international", "origin": "Australia", "installation": installation, "count": count}
+            for installation, count in [("outpatient", 2), ("inpatient", 3), ("emergency", 4), (None, 5), ("unknown", 6)]
+        ] + [
+            {"category": "international", "origin": "Australia", "count": 7},
+            {"category": "domestic", "origin": region.name, "origin_code": region.official_code, "installation": "outpatient", "count": 8},
+            {"category": "domestic", "origin": local.name, "origin_code": local.official_code, "installation": "outpatient", "count": 99},
+            {"category": "domestic", "origin": "Unknown", "installation": "emergency", "count": 99},
+        ]
+        source = store_monthly_health_indicators(period=date(2026, 10, 1), payload=self.payload(tourists))
+        record = source.verification
+        self.assertEqual(record.tourist_visit_rows.filter(installation="other").count(), 3)
+        verifier = get_user_model().objects.create_user("installation-verifier")
+        self.client.force_login(verifier)
+        approval = record.indicator_verifications.get(indicator_code="tourist-visits")
+        response = self.client.get(reverse("verification:dashboard"), {"reference": "2026-10"})
+        self.assertIsNone(response.context["health_summary"])
+        working = record.to_working_payload()
+        form = MonthlyHealthVerificationForm(
+            data={**{
+                key: value for i, row in enumerate(working["tourist_visits"])
+                for key, value in {
+                    f"tourist_{i}_category": row["category"], f"tourist_{i}_origin": row["origin"],
+                    f"tourist_{i}_count": row["count"],
+                }.items()
+            }, "notes": "Verifikasi instalasi"},
+            payload=working, indicator_code="tourist-visits",
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        save_monthly_health_verification(
+            record=record, indicator_verification=approval, data=form.cleaned_data["verified_data"],
+            notes="Verifikasi instalasi", user=verifier, approve=True,
+        )
+        self.assertEqual(record.to_working_payload()["tourist_visits"], working["tourist_visits"])
+        source.refresh_from_db()
+        self.assertEqual(source.raw_response["tourist_visits"], tourists)
+        self.assertEqual(source.source_data["tourist_visits"], tourists)
+        self.assertEqual(record.audits.latest("created_at").after_data["tourist_visits"], working["tourist_visits"])
+        for mode in ("monthly", "quarterly", "semester", "yearly"):
+            response = self.client.get(reverse("verification:dashboard"), {"reference": "2026-10", "period": mode})
+            self.assertContains(response, "Asal instalasi kunjungan wisatawan")
+            summary = response.context["health_summary"]
+            rows = {row["label"]: row for row in summary["tourist_installations"]}
+            self.assertEqual(rows["Rawat jalan"]["wisnus"], 8)
+            self.assertEqual(rows["Rawat jalan"]["wisman"], 2)
+            self.assertEqual(rows["Rawat inap"]["total"], 3)
+            self.assertEqual(rows["IGD"]["total"], 4)
+            self.assertEqual(rows["Lainnya"]["total"], 18)
+            self.assertEqual(sum(row["total"] for row in rows.values()), summary["tourist_published_total"])
+            self.assertEqual(summary["tourist_published_total"], 35)
+
     def test_duplicate_tourist_origins_preserve_all_rows_and_snapshot(self):
         payload = self.payload([
             {"category": "international", "origin": "LOMBOK TENGAH", "count": 3},
@@ -46,6 +104,30 @@ class RegionCleaningTests(TestCase):
             "visits": [], "top_diseases": [], "disease_groups": [],
             "tourist_visits": tourist_rows,
         }
+
+    def test_manual_installation_mapping_preserves_source_and_is_audited(self):
+        source = store_monthly_health_indicators(period=date(2026, 10, 1), payload=self.payload([
+            {"category": "international", "origin": "Australia", "count": 3},
+        ]))
+        record = source.verification
+        self.assertEqual(record.tourist_visit_rows.get().installation, "other")
+        form = MonthlyHealthVerificationForm(
+            data={"tourist_0_category": "international", "tourist_0_origin": "Australia",
+                  "tourist_0_count": 3, "tourist_0_installation": "emergency", "notes": "Sesuai verifikasi IGD"},
+            payload=record.to_working_payload(), indicator_code="tourist-visits",
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        save_monthly_health_verification(
+            record=record, indicator_verification=record.indicator_verifications.get(indicator_code="tourist-visits"),
+            data=form.cleaned_data["verified_data"], notes=form.cleaned_data["notes"],
+            user=get_user_model().objects.create_user("installation-mapper"), approve=False,
+        )
+        self.assertEqual(record.tourist_visit_rows.get().installation, "emergency")
+        audit = record.audits.latest("created_at")
+        self.assertNotIn("installation", audit.before_data["tourist_visits"][0])
+        self.assertEqual(audit.after_data["tourist_visits"][0]["installation"], "emergency")
+        source.refresh_from_db()
+        self.assertNotIn("installation", source.raw_response["tourist_visits"][0])
 
     def test_lombok_tengah_alias_variations_are_cleaned_but_excluded(self):
         region = AdministrativeRegion.objects.create(

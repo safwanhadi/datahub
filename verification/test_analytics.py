@@ -93,13 +93,52 @@ class DynamicIndicatorStandardTests(TestCase):
         self.admin.groups.add(Group.objects.get(name="Administrator DataHub"))
         self.client.force_login(self.admin)
 
+    def test_dashboard_payment_breakdown_respects_period_and_indicator_approval(self):
+        from .services import store_monthly_health_indicators
+
+        for month in (1, 2, 4):
+            source = store_monthly_health_indicators(
+                period=date(2026, month, 1),
+                payload={
+                    "hospital": {"code": "RS-M", "name": "RS Mandalika"},
+                    "visits": [
+                        {"installation": "outpatient", "payment_status": status, "count": count}
+                        for status, count in [("general", 2), ("bpjs", 3), ("private_insurance", 4), ("social_assistance", 5), ("other", 6)]
+                    ] + [
+                        {"installation": "inpatient", "payment_status": "bpjs", "count": 7},
+                        {"installation": "emergency", "payment_status": "general", "count": 99},
+                    ],
+                },
+            )
+            source.verification.indicator_verifications.filter(
+                indicator_code__in=["outpatient-visits", "inpatient-visits"]
+            ).update(status="approved")
+
+        for mode, multiplier in [("monthly", 1), ("quarterly", 2), ("semester", 3), ("yearly", 3)]:
+            with self.subTest(mode=mode):
+                response = self.client.get(reverse("verification:dashboard"), {"period": mode, "reference": "2026-02"})
+                self.assertContains(response, "Rincian kunjungan berdasarkan penjamin")
+                summary = response.context["health_summary"]
+                rows = {row["label"]: row for row in summary["payment_breakdown"]}
+                self.assertEqual(rows["Umum"]["total"], 2 * multiplier)
+                self.assertEqual(rows["BPJS"]["total"], 10 * multiplier)
+                self.assertEqual(rows["Asuransi"]["total"], 4 * multiplier)
+                self.assertEqual(rows["Bantuan sosial"]["total"], 5 * multiplier)
+                self.assertEqual(rows["Lainnya"]["total"], 6 * multiplier)
+                self.assertEqual(sum(row["total"] for row in rows.values()), summary["total_visits"])
+                self.assertEqual(summary["emergency"], 0)
+
+        response = self.client.get(reverse("verification:dashboard"), {"reference": "2025-02"})
+        self.assertContains(response, "Belum ada rincian kunjungan terverifikasi")
+
     def test_dashboard_filter_aggregates_months_and_does_not_reuse_latest_month(self):
+        import calendar
         from .services import store_inpatient_indicator
-        for month in (1, 2):
+        for month in range(1, 13):
             source = store_inpatient_indicator(
                 period=date(2026, month, 1), user=self.admin,
                 payload={
-                    "periode": {"hari": 31 if month == 1 else 28},
+                    "periode": {"hari": calendar.monthrange(2026, month)[1]},
                     "data_dasar": {"jumlah_bed": 100, "hari_perawatan": 2000,
                                    "pasien_keluar": 400, "pasien_mati": 4, "pasien_mati_48": 2},
                     "indikator": {"alos": 5, "bor": 70, "bto": 4, "toi": 2, "gdr": 10, "ndr": 5},
@@ -107,16 +146,44 @@ class DynamicIndicatorStandardTests(TestCase):
             )
             source.verification.status = "approved"
             source.verification.save()
-        for mode in ("quarterly", "semester", "yearly"):
+        for mode, months in (("quarterly", 3), ("semester", 6), ("yearly", 12)):
             response = self.client.get(reverse("verification:dashboard"), {"period": mode, "reference": "2026-02"})
             self.assertEqual(response.status_code, 200)
             items = {r["code"]: r for r in response.context["indicator_analysis"]}
-            self.assertEqual(items["bto"]["value"], Decimal("8.00"))
-            self.assertContains(response, "Data periode belum lengkap")
+            self.assertEqual(items["bto"]["value"], Decimal(4 * months))
+            self.assertEqual(
+                [row.source.period_start.month for row in response.context["inpatient_trend"]],
+                list(range(1, months + 1)),
+            )
+            self.assertContains(response, "Seluruh hasil terverifikasi")
         response = self.client.get(reverse("verification:dashboard"), {"period": "monthly", "reference": "2026-02"})
         self.assertEqual(response.context["latest_inpatient"].bto, Decimal("4.00"))
+        self.assertEqual([row.source.period_start.month for row in response.context["inpatient_trend"]], [2])
         response = self.client.get(reverse("verification:dashboard"), {"period": "yearly", "reference": "2025-02"})
         self.assertEqual(response.context["indicator_analysis"], [])
+        self.assertEqual(list(response.context["inpatient_trend"]), [])
+
+    def test_dashboard_shows_ten_highest_verified_diseases_in_selected_period(self):
+        from .services import store_monthly_health_indicators
+
+        for month in (1, 2, 4):
+            source = store_monthly_health_indicators(period=date(2026, month, 1), payload={
+                "hospital": {"code": "RS-M", "name": "RS Mandalika"},
+                "top_diseases": [
+                    {"installation": "outpatient" if i <= 10 else "inpatient",
+                     "icd10_code": f"A{i:02}", "name": f"Penyakit {i:02}", "patient_count": i}
+                    for i in range(1, 12)
+                ],
+            })
+            if month != 4:
+                source.verification.indicator_verifications.filter(indicator_code="top-diseases").update(status="approved")
+        for mode, multiplier in (("monthly", 1), ("quarterly", 2), ("yearly", 2)):
+            response = self.client.get(reverse("verification:dashboard"), {"period": mode, "reference": "2026-02"})
+            diseases = response.context["health_summary"]["top_diseases"]
+            self.assertEqual([row["patient_count"] for row in diseases], [i * multiplier for i in range(11, 1, -1)])
+            self.assertContains(response, "Sepuluh penyakit")
+            self.assertContains(response, "Penyakit 02")
+            self.assertNotContains(response, "Penyakit 01")
 
     def test_internal_policy_overrides_national_policy_for_same_period(self):
         internal = InpatientIndicatorStandard.objects.create(

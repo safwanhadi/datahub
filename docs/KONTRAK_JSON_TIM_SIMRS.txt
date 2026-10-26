@@ -416,6 +416,23 @@ count
 
 Jika tidak ada kunjungan wisatawan, kirim results sebagai array kosong [].
 
+Penambahan kompatibel: installation pada setiap baris results wisatawan
+  Tipe  : enum string atau null
+  Wajib : belum; respons lama tanpa field ini tetap diterima
+  Nilai : outpatient (rawat jalan), inpatient (rawat inap), emergency (IGD)
+  Data tanpa field, null, kosong, atau nilai yang belum dikenali disimpan pada
+  salinan verifikasi sebagai other (Lainnya). Respons asli tetap dipertahankan.
+  Contoh: {"category":"international","origin":"Australia","installation":"outpatient","count":18}
+  Kirim jumlah terpisah per kategori, asal, dan instalasi; jangan mengirim total
+  gabungan bersamaan dengan rinciannya agar kunjungan tidak dihitung dua kali.
+  DataHub mempertahankan instalasi pada salinan kerja dan analisis Ringkasan
+  internal. API keluaran tetap menggunakan struktur sebelumnya tanpa field
+  installation wisatawan dan tanpa pemisahan per instalasi. Seluruh wisatawan
+  internasional tetap digabung menjadi Luar Indonesia, domestik per wilayah.
+  Pengambilan ulang tidak menimpa salinan verifikasi yang sudah tersedia.
+  Data lama tetap Lainnya sampai salinan verifikasi diperbarui melalui proses
+  koreksi yang disetujui; penambahan field tidak memetakan data lama otomatis.
+
 
 F. JUMLAH PASIEN BERDASARKAN KELOMPOK PENYAKIT
 ============================================================

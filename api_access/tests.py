@@ -14,6 +14,43 @@ from .models import ApiAccessLog, ApiProduct, ExternalApiClient, ExternalApiGran
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SeparatedApiTests(TestCase):
+    @patch(
+        "api_access.authentication.introspect_raw_access_token",
+        return_value={"active": True, "client_id": "external-dashboard", "scope": "read:dash", "exp": 4102444800},
+    )
+    def test_external_tourists_keep_original_contract_across_installations(self, introspect_mock):
+        from verification.models import AdministrativeRegion
+        from verification.services import store_monthly_health_indicators
+
+        region = AdministrativeRegion.objects.create(official_code="51", name="Bali", region_type="province")
+        tourists = []
+        for installation in ("outpatient", "inpatient", "emergency", "other"):
+            tourists.extend([
+                {"category": "international", "origin": "Australia", "installation": installation, "count": 2},
+                {"category": "domestic", "origin": "Bali", "origin_code": "51", "installation": installation, "count": 3},
+            ])
+        source = store_monthly_health_indicators(period=date(2026, 10, 1), payload={
+            "hospital": {"code": "RS-M", "name": "RS Mandalika"}, "tourist_visits": tourists,
+        })
+        source.verification.indicator_verifications.filter(indicator_code="tourist-visits").update(status="approved")
+        ExternalApiGrant.objects.create(client=self.external_client, product=ApiProduct.objects.get(code="health-tourist-visits"))
+        response = self.client.get(
+            reverse("api_external:health-indicator", args=["tourist-visits"]),
+            HTTP_AUTHORIZATION="Bearer external-test-token",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["results"][0]["data"]
+        self.assertEqual(data["total"], 20)
+        self.assertCountEqual(data["breakdown"], [
+            {"category": "wisman", "category_label": "Wisatawan Mancanegara", "origin_id": None,
+             "origin_code": "INTL", "origin": "Luar Indonesia", "is_clean": True, "count": 8},
+            {"category": "wisnus", "category_label": "Wisatawan Nusantara", "origin_id": region.pk,
+             "origin_code": "51", "origin": "Bali", "is_clean": True, "count": 12},
+        ])
+        internal = source.verification.to_payload(include_tourist_installation=True)["tourist_visits"]
+        self.assertEqual(len(internal), 8)
+        self.assertEqual(sum(row["count"] for row in internal), data["total"])
+
     def setUp(self):
         self.user = get_user_model().objects.create_user("internal-user", password="secret")
         source = InpatientIndicatorSource.objects.create(

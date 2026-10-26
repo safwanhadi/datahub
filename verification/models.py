@@ -425,6 +425,7 @@ class VerifiedMonthlyHealthIndicator(models.Model):
             "tourist_visits": [
                 {
                     "category": row.category,
+                    "installation": row.installation,
                     "origin_code": row.origin_code,
                     "origin": row.origin_raw or row.origin,
                     "mapped_code": row.region.official_code if row.region else None,
@@ -446,7 +447,7 @@ class VerifiedMonthlyHealthIndicator(models.Model):
             ],
         }
 
-    def to_payload(self):
+    def to_payload(self, *, include_tourist_installation=False):
         """Bangun kontrak API; domestik luar Lombok Tengah menjadi Wisnus."""
         working = self.to_working_payload()
         if not any((self.visit_rows.exists(), self.top_disease_rows.exists(), self.tourist_visit_rows.exists(), self.disease_group_rows.exists())):
@@ -465,6 +466,8 @@ class VerifiedMonthlyHealthIndicator(models.Model):
                 key = ("domestic", f"region:{row.region_id}")
                 category_code, category_label = "wisnus", "Wisatawan Nusantara"
                 origin_id, origin_code, origin, is_clean = row.region_id, row.region.official_code, row.region.name, True
+            if include_tourist_installation:
+                key = (*key, row.installation)
             item = tourist_groups.setdefault(key, {
                 "category": category_code,
                 "category_label": category_label,
@@ -474,6 +477,8 @@ class VerifiedMonthlyHealthIndicator(models.Model):
                 "is_clean": is_clean,
                 "count": 0,
             })
+            if include_tourist_installation:
+                item["installation"] = row.installation
             item["count"] += row.count
         return {
             "hospital": {
@@ -556,6 +561,10 @@ class VerifiedTopDiseaseRow(models.Model):
 
 
 class VerifiedTouristVisitRow(models.Model):
+    installation = models.CharField(
+        "instalasi", max_length=20, default="other",
+        choices=(("outpatient", "Rawat jalan"), ("inpatient", "Rawat inap"), ("emergency", "IGD"), ("other", "Lainnya")),
+    )
     verification = models.ForeignKey(VerifiedMonthlyHealthIndicator, on_delete=models.CASCADE, related_name="tourist_visit_rows")
     category = models.CharField(max_length=20)
     origin = models.CharField(max_length=160)
