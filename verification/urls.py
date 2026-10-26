@@ -1,10 +1,14 @@
 from django.urls import path
 
 from . import views
+from . import maternal_views
 
 app_name = "verification"
 
 urlpatterns = [
+    path("maternal-perinatal/", maternal_views.profile, name="maternal-profile"),
+    path("maternal-perinatal/ambil/", maternal_views.sync, name="maternal-sync"),
+    path("maternal-perinatal/<int:pk>/verifikasi/", maternal_views.verify, name="maternal-verify"),
     path("", views.dashboard, name="dashboard"),
     path("dokumentasi-api/", views.api_documentation, name="api-documentation"),
     path("standar-indikator/", views.indicator_standard_list, name="standard-list"),

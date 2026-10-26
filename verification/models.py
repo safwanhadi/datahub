@@ -32,6 +32,47 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 
+class MaternalPerinatalSnapshot(models.Model):
+    period_start = models.DateField()
+    period_end = models.DateField()
+    payload = models.JSONField()
+    fetched_at = models.DateTimeField(auto_now_add=True)
+    fetched_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        ordering = ("-fetched_at",)
+
+
+class MaternalPerinatalRecord(models.Model):
+    period_start = models.DateField()
+    period_end = models.DateField()
+    source = models.ForeignKey(MaternalPerinatalSnapshot, on_delete=models.PROTECT)
+    working_data = models.JSONField()
+    status = models.CharField(max_length=20, default="draft", choices=(("draft", "Draf"), ("approved", "Disetujui")))
+    notes = models.TextField(blank=True)
+    verified_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    verified_at = models.DateTimeField(null=True)
+    revision = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ("-period_start",)
+        constraints = [models.UniqueConstraint(fields=("period_start", "period_end"), name="unique_maternal_period")]
+
+
+class MaternalPerinatalAudit(models.Model):
+    record = models.ForeignKey(MaternalPerinatalRecord, on_delete=models.PROTECT, related_name="audits")
+    source = models.ForeignKey(MaternalPerinatalSnapshot, on_delete=models.PROTECT)
+    action = models.CharField(max_length=40)
+    before_data = models.JSONField(null=True)
+    after_data = models.JSONField()
+    notes = models.TextField(blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at", "-pk")
+
+
 def is_local_tourist_region(region):
     """True untuk Kabupaten Lombok Tengah dan seluruh wilayah turunannya."""
     if region is None:
@@ -51,6 +92,7 @@ class SimrsApiEndpoint(models.Model):
         TOP_DISEASES = "top-diseases", "10 Penyakit Terbanyak"
         TOURIST_VISITS = "tourist-visits", "Kunjungan Wisatawan"
         DISEASE_GROUPS = "disease-groups", "Kelompok Penyakit"
+        MATERNAL_PERINATAL = "maternal-perinatal", "Profil Maternal dan Perinatal"
 
     code = models.CharField("kode endpoint", max_length=40, choices=Code, unique=True)
     name = models.CharField("nama endpoint", max_length=160)

@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIMRS maternal perinatal aggregates v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "period",
+    "hospital",
+    "metrics",
+    "maternal_diagnoses",
+    "perinatal_diagnoses"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date"
+        },
+        "end": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "hospital": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "name"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deliveries_total",
+        "deliveries_vaginal",
+        "deliveries_caesarean",
+        "deliveries_other",
+        "live_births",
+        "stillbirths_28w",
+        "stillbirths_22_27w",
+        "stillbirths_unknown_ga",
+        "maternal_discharges",
+        "perinatal_discharges",
+        "maternal_deaths",
+        "pregnancy_related_deaths_unclassified",
+        "neonatal_deaths_early",
+        "neonatal_deaths_late",
+        "newborn_deaths_age_unknown",
+        "maternal_referral_admissions",
+        "neonatal_inborn_admissions",
+        "neonatal_outborn_admissions"
+      ],
+      "properties": {
+        "deliveries_total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "deliveries_vaginal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "deliveries_caesarean": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "deliveries_other": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "live_births": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stillbirths_28w": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stillbirths_22_27w": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stillbirths_unknown_ga": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "maternal_discharges": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "perinatal_discharges": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "maternal_deaths": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "pregnancy_related_deaths_unclassified": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "neonatal_deaths_early": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "neonatal_deaths_late": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "newborn_deaths_age_unknown": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "maternal_referral_admissions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "neonatal_inborn_admissions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "neonatal_outborn_admissions": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "maternal_diagnoses": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "icd10_code",
+          "name",
+          "count"
+        ],
+        "properties": {
+          "icd10_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "perinatal_diagnoses": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "icd10_code",
+          "name",
+          "count"
+        ],
+        "properties": {
+          "icd10_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}

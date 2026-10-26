@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "period": {"start": "2026-10-01", "end": "2026-10-31"},
+  "hospital": {"code": "5202035", "name": "RS Mandalika"},
+  "metrics": {
+    "deliveries_total": 100,
+    "deliveries_vaginal": 60,
+    "deliveries_caesarean": 38,
+    "deliveries_other": 2,
+    "live_births": 101,
+    "stillbirths_28w": 1,
+    "stillbirths_22_27w": 0,
+    "stillbirths_unknown_ga": null,
+    "maternal_discharges": 120,
+    "perinatal_discharges": 110,
+    "maternal_deaths": 0,
+    "pregnancy_related_deaths_unclassified": 1,
+    "neonatal_deaths_early": 2,
+    "neonatal_deaths_late": 1,
+    "newborn_deaths_age_unknown": null,
+    "maternal_referral_admissions": 15,
+    "neonatal_inborn_admissions": 90,
+    "neonatal_outborn_admissions": 20
+  },
+  "maternal_diagnoses": [
+    {"icd10_code": "O14.9", "name": "Preeklamsia, tidak spesifik", "count": 12}
+  ],
+  "perinatal_diagnoses": [
+    {"icd10_code": "P07.3", "name": "Bayi prematur lainnya", "count": 8}
+  ]
+}

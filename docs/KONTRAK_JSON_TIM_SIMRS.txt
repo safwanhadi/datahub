@@ -10,6 +10,14 @@ medis, alamat, nomor telepon, atau identitas pribadi lainnya.
 A. KETENTUAN UMUM
 ============================================================
 
+MODUL INTERNAL BARU: PROFIL MATERNAL DAN PERINATAL
+Spesifikasi terpisah: docs/MATERNAL_PERINATAL_SIMRS.md
+Contoh respons: docs/maternal-perinatal.example.json
+Lembar pemetaan database: docs/maternal-perinatal-mapping.csv
+Kode konfigurasi endpoint DataHub: maternal-perinatal.
+Kontrak ini versi tersendiri: data yang belum tersedia memakai null, bukan 0.
+Tidak mengubah kontrak endpoint lama ataupun keluaran API eksternal DataHub.
+
 1. Method HTTP
    GET
 

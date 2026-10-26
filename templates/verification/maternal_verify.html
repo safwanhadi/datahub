@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Verifikasi Maternal &amp; Perinatal{% endblock %}
+{% block heading %}Verifikasi Maternal &amp; Perinatal{% endblock %}
+{% block content %}
+<section class="panel"><a href="{% url 'verification:maternal-profile' %}">Kembali ke profil</a><h2>{{ record.period_start|date:"F Y" }} · {{ record.get_status_display }}</h2>
+<p>Snapshot sumber #{{ record.source_id }} diterima {{ record.source.fetched_at|date:"d M Y H:i" }}. Koreksi hanya mengubah salinan kerja. Kosongkan angka yang belum tersedia; isi 0 hanya jika telah dipastikan tidak ada kejadian.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="revision" value="{{ record.revision }}"><p>Memuat snapshot terbaru akan mengganti seluruh koreksi periode ini dan mengembalikan status ke draf. Audit tetap tersimpan.</p><button class="button" name="action" value="reload">Muat snapshot terbaru sebagai draf</button></form>
+<details><summary>Lihat snapshot sumber</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{{ source_json }}</pre></details></section>
+<form method="post" class="stack">{% csrf_token %}{{ form.non_field_errors }}{{ form.revision }}{{ form.revision.errors }}
+<section class="panel section-gap"><h2>Jumlah layanan dan kematian</h2><div class="volume-grid">{% for field in form.metric_fields %}<label>{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}</div></section>
+{% for group in form.diagnosis_groups %}<section class="panel section-gap"><h2>{{ group.label }}</h2><div class="table-wrap"><table><thead><tr><th>ICD-10</th><th>Diagnosis utama</th><th>Episode keluar RS</th></tr></thead><tbody>{% for row in group.rows %}<tr><td>{{ row.icd10_code }}</td><td>{{ row.name }}</td><td>{{ row.field }}{{ row.field.errors }}</td></tr>{% empty %}<tr><td colspan="3">Tidak ada rincian tersedia. Lengkapi sumber SIMRS dan muat ulang jika diperlukan.</td></tr>{% endfor %}</tbody></table></div></section>{% endfor %}
+<section class="panel section-gap">{{ form.notes.label_tag }}{{ form.notes }}{{ form.notes.errors }}<p>Menyimpan koreksi mengembalikan status menjadi draf.</p><button class="button" name="action" value="save">Simpan draf</button>{% if perms.verification.approve_verifiedmonthlyhealthindicator %} <button class="button primary" name="action" value="approve">Setujui profil internal</button>{% endif %}</section></form>
+<section class="panel section-gap"><h2>Riwayat pemeriksaan</h2>{% for audit in audits %}<details><summary>{{ audit.created_at|date:"d M Y H:i" }} · {{ audit.action }} · {{ audit.actor|default:"—" }} · snapshot #{{ audit.source_id }}</summary><p>{{ audit.notes }}</p><h3>Sebelum</h3><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{{ audit.before_data }}</pre><h3>Sesudah</h3><pre style="white-space:pre-wrap;overflow-wrap:anywhere">{{ audit.after_data }}</pre></details>{% endfor %}</section>
+{% endblock %}
