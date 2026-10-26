@@ -28,6 +28,10 @@ def profile(request):
     return render(request, "verification/maternal_profile.html", {
         "period_form": form, "fetch_form": IndicatorPeriodForm(initial={"period_type": "month", "year": today.year, "month": today.month}),
         "start": start, "end": end, "summary": summary, "trend": trend,
+        "headline_metrics": [item for item in summary["metrics"] if item["key"] in {
+            "deliveries_total", "live_births", "maternal_deaths", "stillbirths_28w",
+            "neonatal_deaths_early", "neonatal_deaths_late",
+        }],
         "covered_months": len(records), "expected_months": expected_months,
         "queue": MaternalPerinatalRecord.objects.select_related("source", "verified_by").all(),
     })
