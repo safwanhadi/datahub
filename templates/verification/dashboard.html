@@ -72,16 +72,18 @@
     <div class="published"><span>Wisatawan Mancanegara</span><strong>{{ health_summary.wisman_total }}</strong><small>Seluruh kategori internasional</small></div>
     <div><span>Total wisatawan</span><strong>{{ health_summary.tourist_published_total }}</strong><small>Wisnus + Wisman</small></div>
   </div>
-  <h3>Asal instalasi kunjungan wisatawan</h3>
-  <p class="data-note">Data tanpa instalasi atau dengan nilai instalasi yang belum dikenali masuk Lainnya. Rincian dipisahkan ketika instalasi sudah tersedia pada salinan verifikasi. Hanya data wisatawan terverifikasi yang dihitung.</p>
-  <div class="table-wrap"><table class="mapping-table">
+  <section class="tourist-detail-block" aria-labelledby="tourist-installation-heading">
+  <div class="tourist-detail-heading"><h3 id="tourist-installation-heading">Asal instalasi kunjungan wisatawan</h3><p>Distribusi kunjungan terverifikasi menurut instalasi pelayanan.</p></div>
+  <div class="table-wrap"><table class="mapping-table tourist-detail-table">
     <thead><tr><th scope="col">Instalasi</th><th scope="col">Wisatawan Nusantara</th><th scope="col">Wisatawan Mancanegara</th><th scope="col">Total</th></tr></thead>
     <tbody>{% for row in health_summary.tourist_installations %}<tr><th scope="row">{{ row.label }}</th><td>{{ row.wisnus }}</td><td>{{ row.wisman }}</td><td><strong>{{ row.total }}</strong></td></tr>{% endfor %}</tbody>
     <tfoot><tr><th scope="row">Total</th><td>{{ health_summary.wisnus_total }}</td><td>{{ health_summary.wisman_total }}</td><td>{{ health_summary.tourist_published_total }}</td></tr></tfoot>
   </table></div>
-  {% if period_mode != "monthly" %}<div class="table-wrap"><table class="mapping-table tourist-period-table"><thead><tr><th>Bulan</th><th>Wisatawan Nusantara</th><th>Wisatawan Mancanegara</th><th>Total</th></tr></thead><tbody>
+  <p class="tourist-detail-note"><strong>Lainnya</strong> mencakup data tanpa instalasi atau instalasi yang belum dikenali.</p>
+  </section>
+  {% if period_mode != "monthly" %}<section class="tourist-detail-block" aria-labelledby="tourist-month-heading"><div class="tourist-detail-heading"><h3 id="tourist-month-heading">Rincian kunjungan per bulan</h3><p>Wisatawan Nusantara dan Mancanegara pada {{ period_label }}.</p></div><div class="table-wrap"><table class="mapping-table tourist-period-table tourist-detail-table"><thead><tr><th>Bulan</th><th>Wisatawan Nusantara</th><th>Wisatawan Mancanegara</th><th>Total</th></tr></thead><tbody>
     {% for row in health_summary.tourist_months %}<tr><td><strong>{{ row.period|date:"F Y" }}</strong></td><td>{{ row.wisnus }}</td><td>{{ row.wisman }}</td><td><strong>{{ row.total }}</strong></td></tr>{% endfor %}
-  </tbody><tfoot><tr><th>Total {{ period_label }}</th><th>{{ health_summary.wisnus_total }}</th><th>{{ health_summary.wisman_total }}</th><th>{{ health_summary.tourist_published_total }}</th></tr></tfoot></table></div>{% endif %}
+  </tbody><tfoot><tr><th>Total {{ period_label }}</th><th>{{ health_summary.wisnus_total }}</th><th>{{ health_summary.wisman_total }}</th><th>{{ health_summary.tourist_published_total }}</th></tr></tfoot></table></div></section>{% endif %}
   {% else %}<div class="empty">Belum ada indikator kesehatan terverifikasi pada {{ period_label }}.</div>{% endif %}
 </section>
 
