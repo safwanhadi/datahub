@@ -26,6 +26,7 @@ urlpatterns = [
     path("indikator-rawat-inap/ambil/", views.sync_inpatient_indicators, name="indicator-sync"),
     path("indikator-rawat-inap/<uuid:pk>/koreksi-data/", views.correct_inpatient_working_data, name="inpatient-working-data-correct"),
     path("indikator-rawat-inap/<uuid:pk>/verifikasi/", views.verify_inpatient_indicators, name="indicator-verify"),
+    path("indikator-rawat-inap/<uuid:pk>/pembanding/ambil/", views.sync_inpatient_regular_rooms, name="inpatient-regular-rooms-sync"),
     path("indikator-kesehatan/", views.monthly_health_indicators, name="health-indicators"),
     path("indikator-kesehatan/ambil/", views.sync_monthly_health_indicators, name="health-indicator-sync"),
     path("indikator-kesehatan/<uuid:pk>/<slug:code>/verifikasi/", views.verify_monthly_health_indicators, name="health-indicator-verify"),

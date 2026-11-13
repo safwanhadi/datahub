@@ -21,6 +21,7 @@ from .models import (
     InpatientIndicatorAudit,
     InpatientIndicatorSource,
     InpatientRoomIndicatorSource,
+    InpatientRegularRoomSnapshot,
     MonthlyHealthIndicatorAudit,
     MonthlyHealthIndicatorSource,
     HealthIndicatorVerification,
@@ -318,6 +319,54 @@ def fetch_inpatient_indicator(*, period=None, period_start=None, period_end=None
         raise ValueError("Endpoint indikator per ruang harus mengembalikan data berupa array.")
     payload["ruangan"] = rooms
     return store_inpatient_indicator(period_start=start, period_end=end, period_type=period_type, payload=payload, user=user)
+
+
+def fetch_inpatient_regular_rooms(*, source, user=None):
+    """Tarik pembanding secara mandiri; simpan setiap respons sebagai snapshot baru."""
+    endpoint_url, timeout = resolve_simrs_endpoint(
+        SimrsApiEndpoint.Code.INPATIENT_REGULAR_ROOMS,
+        settings.SIMRS_INPATIENT_REGULAR_ROOMS_API_URL,
+    )
+    separator = "&" if "?" in endpoint_url else "?"
+    payload = _fetch_simrs_json(
+        endpoint_url + separator + urlencode({
+            "tgl_awal": source.period_start.isoformat(),
+            "tgl_akhir": source.period_end.isoformat(),
+        }),
+        headers={"Accept": "application/json", "Authorization": f"Bearer {get_simrs_access_token()}"},
+        timeout=timeout, endpoint_name="rawat inap tanpa intensif dan isolasi",
+    )
+    validate_regular_room_payload(payload, source.period_start, source.period_end)
+    return InpatientRegularRoomSnapshot.objects.create(source=source, payload=payload, fetched_by=user)
+
+
+def validate_regular_room_payload(payload, start, end):
+    """Periksa data pembanding sebelum menyimpan snapshot gabungan."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+        raise ValueError("Endpoint tanpa intensif dan isolasi harus mengembalikan data berupa array.")
+    period = payload.get("period", {})
+    if (
+        not isinstance(period, dict)
+        or period.get("start") != start.isoformat()
+        or period.get("end") != end.isoformat()
+        or period.get("days") != (end - start).days + 1
+    ):
+        raise ValueError("Periode data tanpa intensif dan isolasi tidak sesuai periode yang diminta.")
+    codes = set()
+    for row in payload["data"]:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("kd_bangsal"), str) or not row["kd_bangsal"].strip()
+            or not isinstance(row.get("bangsal"), str) or not row["bangsal"].strip()
+        ):
+            raise ValueError("Data instalasi wajib memiliki kode dan nama bangsal.")
+        if row["kd_bangsal"] in codes:
+            raise ValueError("Kode instalasi pada data pembanding tidak boleh berulang.")
+        codes.add(row["kd_bangsal"])
+        for key in ("bed", "hp", "d", "mati", "mati_48", "alos", "bor", "bto", "toi", "gdr", "ndr"):
+            value = row.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not Decimal(str(value)).is_finite():
+                raise ValueError(f"Nilai {key} pada data instalasi harus berupa angka yang valid.")
 
 
 def resolve_region(origin_code, origin_name):

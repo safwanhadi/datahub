@@ -88,6 +88,7 @@ class SimrsApiEndpoint(models.Model):
     class Code(models.TextChoices):
         INPATIENT_INDICATORS = "inpatient-indicators", "Indikator Rawat Inap"
         INPATIENT_ROOMS = "inpatient-rooms", "Indikator Rawat Inap per Ruang"
+        INPATIENT_REGULAR_ROOMS = "inpatient-regular-rooms", "Rawat Inap tanpa Intensif dan Isolasi"
         VISITS = "visits", "Kunjungan Pasien"
         TOP_DISEASES = "top-diseases", "10 Penyakit Terbanyak"
         TOURIST_VISITS = "tourist-visits", "Kunjungan Wisatawan"
@@ -305,6 +306,21 @@ class InpatientIndicatorSource(models.Model):
 
     def __str__(self):
         return self.period.strftime("%B %Y")
+
+    @property
+    def regular_room_details(self):
+        snapshot = self.regular_room_snapshots.order_by("-fetched_at", "-pk").first()
+        if snapshot:
+            return snapshot.payload.get("data", [])
+        payload = self.raw_response.get("per_instalasi_tanpa_intensif_isolasi", {})
+        return payload.get("data", [])
+
+
+class InpatientRegularRoomSnapshot(models.Model):
+    source = models.ForeignKey(InpatientIndicatorSource, on_delete=models.PROTECT, related_name="regular_room_snapshots")
+    payload = models.JSONField("respons asli SIMRS tanpa intensif dan isolasi")
+    fetched_at = models.DateTimeField(auto_now_add=True)
+    fetched_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
 
 
 class VerifiedInpatientIndicator(models.Model):

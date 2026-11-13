@@ -1,0 +1,12 @@
+<section class="panel">
+  <div class="panel-title"><div><h2>Indikator per ruang rawat inap</h2><p>Rincian keseluruhan, termasuk intensif dan isolasi yang tersedia dari SIMRS. Total data dasar merupakan penjumlahan seluruh baris ruang pada tabel ini.</p></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Ruang</th><th>TT</th><th>HP</th><th>Keluar</th><th>Meninggal</th><th>Meninggal &gt;48 jam</th><th>ALOS</th><th>BOR</th><th>BTO</th><th>TOI</th><th>GDR</th><th>NDR</th></tr></thead>
+    <tbody>{% for room in inpatient_rooms %}<tr>
+      <td><strong>{{ room.source_room.room_name }}</strong><small><code>{{ room.source_room.room_code }}</code>{% if room.source_room.is_special %} · Ruang khusus{% endif %}</small></td>
+      <td>{{ room.source_room.beds }}</td><td>{{ room.source_room.care_days }}</td><td>{{ room.source_room.discharged_patients }}</td><td>{{ room.source_room.deaths }}</td><td>{{ room.source_room.deaths_over_48h }}</td>
+      <td>{{ room.alos }}</td><td>{{ room.bor }}%</td><td>{{ room.bto }}</td><td>{{ room.toi }}</td><td>{{ room.gdr }}‰</td><td>{{ room.ndr }}‰</td>
+    </tr>{% empty %}<tr><td colspan="12" class="empty">Data per ruang belum tersedia dari SIMRS.</td></tr>{% endfor %}</tbody>
+    {% if inpatient_room_totals %}<tfoot><tr><th scope="row">Total data dasar termasuk intensif dan isolasi</th><th>{{ inpatient_room_totals.beds }}</th><th>{{ inpatient_room_totals.care_days }}</th><th>{{ inpatient_room_totals.discharged_patients }}</th><th>{{ inpatient_room_totals.deaths }}</th><th>{{ inpatient_room_totals.deaths_over_48h }}</th><td colspan="6">—</td></tr></tfoot>{% endif %}
+  </table></div>
+</section>

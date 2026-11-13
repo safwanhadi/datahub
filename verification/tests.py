@@ -16,6 +16,7 @@ from .models import (
     HealthIndicatorVerification,
     InpatientIndicatorAudit,
     InpatientRoomIndicatorSource,
+    InpatientRegularRoomSnapshot,
     VerifiedInpatientRoomIndicator,
     VerifiedInpatientIndicator,
     VerifiedHealthVisitRow,
@@ -112,6 +113,34 @@ class VerificationFlowTests(TestCase):
         page = self.client.get(reverse("verification:indicator-verify", args=[source.pk]))
         self.assertContains(page, "Indikator per ruang rawat inap")
         self.assertContains(page, "Ruang Anak")
+        InpatientRegularRoomSnapshot.objects.create(source=source, fetched_by=self.user, payload={"data": [
+            {"kd_bangsal": "ANAK", "bangsal": "Ruang Anak", "bed": 10, "hp": 240, "d": 40, "mati": 1, "mati_48": 0},
+            {"kd_bangsal": "UMUM", "bangsal": "Ruang Umum", "bed": 2, "hp": 10, "d": 5, "mati": 0, "mati_48": 0},
+        ]})
+        for route in ("verification:indicator-verify", "verification:inpatient-working-data-correct"):
+            page = self.client.get(reverse(route, args=[source.pk]))
+            self.assertEqual(page.context["inpatient_room_totals"], {
+                "beds": 25, "care_days": 510, "discharged_patients": 85,
+                "deaths": 3, "deaths_over_48h": 1,
+            })
+            self.assertEqual(page.context["regular_room_totals"], {
+                "beds": 12, "care_days": 250, "discharged_patients": 45,
+                "deaths": 1, "deaths_over_48h": 0,
+            })
+            self.assertContains(page, "Cakupan data dasar total: tanpa intensif dan isolasi.")
+            if route == "verification:indicator-verify":
+                self.assertContains(page, "Total data dasar termasuk intensif dan isolasi")
+            else:
+                self.assertNotContains(page, "Indikator per ruang rawat inap")
+                self.assertNotContains(page, "Total data dasar termasuk intensif dan isolasi")
+                self.assertNotContains(page, "Ruang Perina")
+            self.assertContains(page, "Total data dasar tanpa intensif dan isolasi")
+        source.refresh_from_db()
+        self.assertEqual(source.beds, 30)
+        InpatientRegularRoomSnapshot.objects.create(source=source, payload={"data": []})
+        page = self.client.get(reverse("verification:indicator-verify", args=[source.pk]))
+        self.assertIsNone(page.context["regular_room_totals"])
+        self.assertNotContains(page, "Total data dasar tanpa intensif dan isolasi")
 
     def test_refetch_resets_approval_and_replaces_working_data_and_rooms(self):
         period = date(2027, 6, 1)
@@ -400,6 +429,41 @@ class FlexiblePeriodAndRowFormTests(TestCase):
 
 class DynamicSimrsEndpointTests(TestCase):
     @patch("verification.services.get_simrs_access_token", return_value="simrs-token")
+    @patch("verification.services._fetch_simrs_json")
+    def test_main_sync_fetches_comparison_and_preserves_main_on_comparison_failure(self, fetch_mock, token_mock):
+        from .services import SimrsConnectionError
+        user = get_user_model().objects.create_superuser("sync-comparison", password="test-only")
+        self.client.force_login(user)
+        total = {
+            "periode": {"hari": 31},
+            "data_dasar": {"jumlah_bed": 20, "hari_perawatan": 310, "pasien_keluar": 62, "pasien_mati": 2, "pasien_mati_48": 1},
+            "indikator": {"alos": 5, "bor": 50, "bto": 3.1, "toi": 5, "gdr": 32.26, "ndr": 16.13},
+        }
+        row = {"kd_bangsal": "A", "bangsal": "Instalasi A", "bed": 10, "hp": 186,
+               "d": 31, "mati": 1, "mati_48": 1, "alos": 6, "bor": 60, "bto": 3.1,
+               "toi": 4, "gdr": 32.26, "ndr": 32.26, "is_khusus": False}
+        comparison = {"period": {"start": "2026-08-01", "end": "2026-08-31", "days": 31}, "data": [row]}
+        request_data = {"period_type": "month", "year": 2026, "month": 8}
+        for result, message, count in (
+            (comparison, "Data pembanding per instalasi juga berhasil diambil.", 1),
+            (SimrsConnectionError("Tidak tersedia"), "Data utama tersimpan, tetapi pembanding per instalasi belum dapat diambil", 1),
+            ({**comparison, "data": []}, "SIMRS mengembalikan pembanding per instalasi kosong", 2),
+        ):
+            with self.subTest(message=message):
+                fetch_mock.reset_mock()
+                fetch_mock.side_effect = [dict(total), {"data": [row]}, result]
+                response = self.client.post(reverse("verification:indicator-sync"), request_data, follow=True)
+                self.assertContains(response, message)
+                self.assertEqual(fetch_mock.call_count, 3)
+                source = InpatientIndicatorSource.objects.get(period_start=date(2026, 8, 1))
+                self.assertEqual(source.beds, 20)
+                self.assertEqual(source.room_sources.count(), 1)
+                self.assertEqual(source.regular_room_snapshots.count(), count)
+                page = self.client.get(reverse("verification:inpatient-working-data-correct", args=[source.pk]))
+                if count == 1:
+                    self.assertContains(page, "Instalasi A")
+
+    @patch("verification.services.get_simrs_access_token", return_value="simrs-token")
     @patch("verification.services.urlopen")
     def test_inpatient_dns_error_identifies_endpoint_and_host(self, urlopen_mock, token_mock):
         import socket
@@ -464,6 +528,70 @@ class DynamicSimrsEndpointTests(TestCase):
         self.assertEqual(urlopen_mock.call_count, 2)
         self.assertEqual(source.verification.room_indicators.get().source_room.room_name, "Ruang A")
         self.assertEqual(source.verification.room_indicators.get().bor, 60)
+
+    @patch("verification.services.get_simrs_access_token", return_value="simrs-token")
+    @patch("verification.services._fetch_simrs_json")
+    def test_regular_rooms_are_archived_and_shown_without_changing_total(self, fetch_mock, token_mock):
+        SimrsApiEndpoint.objects.update_or_create(
+            code=SimrsApiEndpoint.Code.INPATIENT_REGULAR_ROOMS,
+            defaults={"name": "Tanpa intensif dan isolasi", "url": "https://simrs.example/regular/", "is_active": True},
+        )
+        total = {
+            "periode": {"hari": 31},
+            "data_dasar": {"jumlah_bed": 20, "hari_perawatan": 310, "pasien_keluar": 62, "pasien_mati": 2, "pasien_mati_48": 1},
+            "indikator": {"alos": 5, "bor": 50, "bto": 3.1, "toi": 5, "gdr": 32.26, "ndr": 16.13},
+        }
+        supplemental = {
+            "period": {"start": "2026-10-01", "end": "2026-10-31", "days": 31},
+            "data": [{"kd_bangsal": "RSM02", "bangsal": "RUANG KEMBANG KOMAK", "bed": 25,
+                      "hp": 1013, "d": 194, "mati": 8, "mati_48": 6, "alos": 5.22,
+                      "bor": 130.71, "bto": 7.76, "toi": -1.23, "gdr": 41.24, "ndr": 30.93, "is_khusus": False}],
+        }
+        source = store_inpatient_indicator(period=date(2026, 10, 1), payload=total)
+        record = source.verification
+        record.status = VerifiedInpatientIndicator.Status.APPROVED
+        record.save()
+        user = get_user_model().objects.create_superuser("regular-verifier", password="test-only")
+        self.client.force_login(user)
+        route = reverse("verification:inpatient-regular-rooms-sync", args=[source.pk])
+        fetch_mock.return_value = supplemental
+        self.assertEqual(self.client.get(route).status_code, 405)
+        self.assertEqual(self.client.post(route).status_code, 302)
+        self.assertEqual(fetch_mock.call_count, 1)
+        source.refresh_from_db()
+        self.assertEqual(source.raw_response, total)
+        self.assertEqual(source.regular_room_snapshots.get().payload, supplemental)
+        self.assertEqual(source.regular_room_snapshots.get().fetched_by, user)
+        self.assertEqual(source.verification.status, VerifiedInpatientIndicator.Status.APPROVED)
+        self.assertEqual(source.verification.working_beds, 20)
+        self.assertEqual(source.verification.bor, 50)
+        self.assertEqual(source.room_sources.count(), 0)
+        self.assertIn("tgl_awal=2026-10-01&tgl_akhir=2026-10-31", fetch_mock.call_args.args[0])
+        for route in ("verification:indicator-verify", "verification:inpatient-working-data-correct"):
+            page = self.client.get(reverse(route, args=[source.pk]))
+            self.assertContains(page, "RUANG KEMBANG KOMAK")
+            self.assertContains(page, "konfirmasi kapasitas dan hari perawatan")
+        source.refresh_from_db()
+        self.assertEqual(source.raw_response, total)
+        self.client.post(reverse("verification:inpatient-regular-rooms-sync", args=[source.pk]))
+        self.assertEqual(source.regular_room_snapshots.count(), 2)
+        from .services import SimrsConnectionError
+        fetch_mock.side_effect = SimrsConnectionError("Endpoint pembanding tidak tersedia.")
+        self.client.post(reverse("verification:inpatient-regular-rooms-sync", args=[source.pk]))
+        self.assertEqual(source.regular_room_snapshots.count(), 2)
+        self.assertEqual(source.regular_room_details, supplemental["data"])
+        record.refresh_from_db()
+        self.assertEqual(record.status, VerifiedInpatientIndicator.Status.APPROVED)
+        user.is_superuser = False
+        user.save()
+        self.assertEqual(self.client.post(reverse("verification:inpatient-regular-rooms-sync", args=[source.pk])).status_code, 403)
+
+    def test_regular_rooms_reject_wrong_period_and_invalid_rows(self):
+        from .services import validate_regular_room_payload
+        start, end = date(2026, 10, 1), date(2026, 10, 31)
+        for payload in ({"data": []}, {"period": {"start": "2026-10-01", "end": "2026-10-31", "days": 31}, "data": [None]}, {"data": {}}):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                validate_regular_room_payload(payload, start, end)
 
     @patch("verification.services.get_simrs_access_token", return_value="simrs-token")
     @patch("verification.services.urlopen")

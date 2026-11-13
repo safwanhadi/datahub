@@ -20,7 +20,7 @@ from .analytics import analyze_inpatient_record, get_applicable_standards, summa
 from .models import AdministrativeRegion, HealthIndicatorVerification, InpatientIndicatorSource, InpatientIndicatorStandard, MonthlyHealthIndicatorSource, RegionAlias, SimrsApiEndpoint, VerifiedInpatientIndicator, VerifiedMonthlyHealthIndicator, VerifiedTouristVisitRow, normalize_region_name
 from .health_metadata import HEALTH_INDICATORS, HEALTH_VERIFICATION_GROUPS, TOURIST_INSTALLATION_LABELS, tourist_installation
 from .oauth import OAuthServerUnavailable
-from .services import reload_tourist_working_data
+from .services import reload_tourist_working_data, fetch_inpatient_regular_rooms
 from .services import SimrsConnectionError, fetch_inpatient_indicator, fetch_monthly_health_indicators, reprocess_region_mappings, save_inpatient_verification, save_inpatient_working_data_correction, save_monthly_health_verification
 
 
@@ -393,7 +393,7 @@ def inpatient_indicators(request):
 @permission_required("verification.change_verifiedinpatientindicator", raise_exception=True)
 @require_http_methods(["GET", "POST"])
 def correct_inpatient_working_data(request, pk):
-    source = get_object_or_404(InpatientIndicatorSource.objects.select_related("verification"), pk=pk)
+    source = get_object_or_404(InpatientIndicatorSource.objects.select_related("verification").prefetch_related("verification__room_indicators__source_room"), pk=pk)
     record = source.verification
     initial = {
         "beds": record.working_beds,
@@ -412,6 +412,7 @@ def correct_inpatient_working_data(request, pk):
         return redirect("verification:indicators")
     return render(request, "verification/inpatient_working_data_form.html", {
         "source": source, "record": record, "form": form,
+        **_inpatient_room_context(source, record),
     })
 
 
@@ -422,7 +423,7 @@ def sync_inpatient_indicators(request):
     form = IndicatorPeriodForm(request.POST)
     if form.is_valid():
         try:
-            fetch_inpatient_indicator(period_start=form.cleaned_data["period_start"], period_end=form.cleaned_data["period_end"], period_type=form.cleaned_data["period_type"], user=request.user)
+            source = fetch_inpatient_indicator(period_start=form.cleaned_data["period_start"], period_end=form.cleaned_data["period_end"], period_type=form.cleaned_data["period_type"], user=request.user)
         except (
             ImproperlyConfigured,
             OAuthServerUnavailable,
@@ -434,9 +435,35 @@ def sync_inpatient_indicators(request):
             messages.error(request, f"Data belum dapat diambil: {exc}")
         else:
             messages.success(request, "Data indikator berhasil diambil dari SIMRS.")
+            try:
+                snapshot = fetch_inpatient_regular_rooms(source=source, user=request.user)
+            except (ImproperlyConfigured, OAuthServerUnavailable, SimrsConnectionError, OSError, KeyError, ValueError) as exc:
+                messages.warning(request, f"Data utama tersimpan, tetapi pembanding per instalasi belum dapat diambil: {exc}. Gunakan tombol ambil pembanding pada halaman verifikasi untuk mencoba kembali.")
+            else:
+                if snapshot.payload.get("data"):
+                    messages.success(request, "Data pembanding per instalasi juga berhasil diambil.")
+                else:
+                    messages.warning(request, "Data utama tersimpan, tetapi SIMRS mengembalikan pembanding per instalasi kosong untuk periode ini.")
     else:
         messages.error(request, "Silakan pilih bulan data yang benar.")
     return redirect("verification:indicators")
+
+
+@login_required
+@permission_required("verification.change_verifiedinpatientindicator", raise_exception=True)
+@require_http_methods(["POST"])
+def sync_inpatient_regular_rooms(request, pk):
+    source = get_object_or_404(InpatientIndicatorSource, pk=pk)
+    try:
+        snapshot = fetch_inpatient_regular_rooms(source=source, user=request.user)
+    except (ImproperlyConfigured, OAuthServerUnavailable, SimrsConnectionError, OSError, KeyError, ValueError) as exc:
+        messages.error(request, f"Data pembanding belum dapat diambil: {exc}")
+    else:
+        if snapshot.payload.get("data"):
+            messages.success(request, "Data pembanding tanpa intensif dan isolasi diperbarui. Hasil verifikasi tetap tersimpan.")
+        else:
+            messages.warning(request, "SIMRS mengembalikan pembanding per instalasi kosong untuk periode ini. Hasil verifikasi tetap tersimpan.")
+    return redirect("verification:indicator-verify", pk=source.pk)
 
 
 @login_required
@@ -454,7 +481,31 @@ def verify_inpatient_indicators(request, pk):
         save_inpatient_verification(record=record, cleaned_data=form.cleaned_data, user=request.user, approve=approve)
         messages.success(request, "Data terverifikasi dan tersedia pada enam API." if approve else "Perubahan disimpan sebagai draf.")
         return redirect("verification:indicators")
-    return render(request, "verification/indicator_verify.html", {"source": source, "record": record, "form": form})
+    return render(request, "verification/indicator_verify.html", {
+        "source": source, "record": record, "form": form,
+        **_inpatient_room_context(source, record),
+    })
+
+
+def _inpatient_room_context(source, record):
+    rooms = list(record.room_indicators.all())
+    regular_rooms = source.regular_room_details
+    fields = {
+        "beds": "bed", "care_days": "hp", "discharged_patients": "d",
+        "deaths": "mati", "deaths_over_48h": "mati_48",
+    }
+    return {
+        "inpatient_rooms": rooms,
+        "inpatient_room_totals": {
+            field: sum(getattr(room.source_room, field) for room in rooms)
+            for field in fields
+        } if rooms else None,
+        "regular_rooms": regular_rooms,
+        "regular_room_totals": {
+            field: sum(row.get(key, 0) for row in regular_rooms)
+            for field, key in fields.items()
+        } if regular_rooms else None,
+    }
 
 
 INDICATOR_META = {

@@ -186,6 +186,7 @@ SIMADU_SSO_TIMEOUT = int(os.environ.get("SIMADU_SSO_TIMEOUT", "10"))
 # PHP merupakan satu-satunya jembatan ke SIMRS; Django tidak membuka koneksi DB SIMRS.
 SIMRS_INDICATOR_API_URL = os.environ.get("SIMRS_INDICATOR_API_URL", "")
 SIMRS_INPATIENT_ROOMS_API_URL = os.environ.get("SIMRS_INPATIENT_ROOMS_API_URL", "")
+SIMRS_INPATIENT_REGULAR_ROOMS_API_URL = os.environ.get("SIMRS_INPATIENT_REGULAR_ROOMS_API_URL", "")
 INPATIENT_TOTAL_EXCLUDED_ROOM_KEYWORDS = tuple(
     value.strip().upper()
     for value in os.environ.get(
